@@ -1,5 +1,0 @@
-Revision V2
-- Added adjustable objective weights for project completion, priority, and preference bonuses, and start-week penalty.
-- Added reset-to-default button for objective weights.
-- Added Excel export for results page.
-- Improved unselected project explanations to account for more situations.
