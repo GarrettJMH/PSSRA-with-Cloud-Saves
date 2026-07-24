@@ -13,15 +13,49 @@ DEFAULTS = {
 }
 
 
+def is_user_logged_in():
+    """
+    Safely checks whether the user is logged in.
+    Returns False if Streamlit auth is not configured.
+    """
+
+    return bool(getattr(st.user, "is_logged_in", False))
+
+
+def streamlit_auth_is_configured():
+    """
+    Checks whether Streamlit login appears to be configured in secrets.
+    """
+
+    try:
+        auth_config = st.secrets.get("auth", {})
+    except Exception:
+        return False
+
+    required_keys = [
+        "redirect_uri",
+        "cookie_secret",
+        "client_id",
+        "client_secret",
+        "server_metadata_url",
+    ]
+
+    return all(
+        str(auth_config.get(key, "")).strip() != ""
+        for key in required_keys
+    )
+
+
 def handle_login_choice():
     """
     Lets users either log in for autosave or continue as a guest.
+    If Streamlit auth is not configured, the app still allows guest mode.
     """
 
     if "guest_mode" not in st.session_state:
         st.session_state.guest_mode = False
 
-    if st.user.is_logged_in:
+    if is_user_logged_in():
         st.session_state.guest_mode = False
         return
 
@@ -33,6 +67,18 @@ def handle_login_choice():
     st.info(
         "Log in to enable cloud autosave and restore your previous work after refreshing the page."
     )
+
+    if not streamlit_auth_is_configured():
+        st.warning(
+            "Login is not configured yet for this deployment. "
+            "You can continue without logging in, but autosave and refresh recovery will be disabled."
+        )
+
+        if st.button("Continue without autosave", use_container_width=True):
+            st.session_state.guest_mode = True
+            st.rerun()
+
+        st.stop()
 
     st.warning(
         "You can continue without logging in, but autosave and refresh recovery will be disabled. "
@@ -137,7 +183,7 @@ def autosave_current_state(reason="", delete_if_empty=False):
     This overwrites the previous autosave for that user.
     """
 
-    if not st.user.is_logged_in:
+    if not is_user_logged_in():
         return
 
     if not current_app_has_content():
@@ -236,7 +282,7 @@ def restore_autosave_before_widgets():
     """
 
     if (
-        st.user.is_logged_in
+        is_user_logged_in()
         and "autosave_restore_checked" not in st.session_state
     ):
         st.session_state.autosave_restore_checked = True
@@ -288,7 +334,7 @@ def clear_all_app_data():
     if "cloud_saved_scenarios" in st.session_state:
         st.session_state.cloud_saved_scenarios = []
 
-    if st.user.is_logged_in:
+    if is_user_logged_in():
         try:
             cloud_save.delete_user_autosave(get_logged_in_user_id())
             st.session_state.autosave_status_message = "All data cleared and autosave deleted."
