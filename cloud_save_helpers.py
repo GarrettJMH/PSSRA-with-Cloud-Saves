@@ -126,3 +126,83 @@ def delete_scenario_from_cloud(scenario_id, access_code):
     )
 
     return response.data
+
+AUTOSAVE_TABLE_NAME = "user_autosaves"
+
+
+def save_user_autosave(user_id, user_email, scenario_json):
+    """
+    Saves the latest autosave for a user.
+
+    This uses upsert, so each user only has one autosave row.
+    The previous autosave is overwritten instead of creating another row.
+    """
+
+    if str(user_id).strip() == "":
+        raise ValueError("Cannot autosave because the user ID is missing.")
+
+    row = {
+        "user_id": str(user_id),
+        "user_email": str(user_email) if user_email else "",
+        "scenario_json": scenario_json,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    supabase = get_supabase_client()
+
+    response = (
+        supabase
+        .table(AUTOSAVE_TABLE_NAME)
+        .upsert(row, on_conflict="user_id")
+        .execute()
+    )
+
+    return response.data
+
+
+def load_user_autosave(user_id):
+    """
+    Loads the latest autosave for a user.
+    Returns None if no autosave exists.
+    """
+
+    if str(user_id).strip() == "":
+        return None
+
+    supabase = get_supabase_client()
+
+    response = (
+        supabase
+        .table(AUTOSAVE_TABLE_NAME)
+        .select("scenario_json, updated_at")
+        .eq("user_id", str(user_id))
+        .limit(1)
+        .execute()
+    )
+
+    if response.data is None or len(response.data) == 0:
+        return None
+
+    return response.data[0]
+
+
+def delete_user_autosave(user_id):
+    """
+    Deletes the user's autosave.
+    Optional, useful for a Reset/Clear feature.
+    """
+
+    if str(user_id).strip() == "":
+        return None
+
+    supabase = get_supabase_client()
+
+    response = (
+        supabase
+        .table(AUTOSAVE_TABLE_NAME)
+        .delete()
+        .eq("user_id", str(user_id))
+        .execute()
+    )
+
+    return response.data

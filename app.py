@@ -29,10 +29,15 @@ import scenario_file_helpers as scenario_files
 
 import cloud_save_helpers as cloud_save
 
+import app_state_helpers as app_state
+
 st.set_page_config(
     page_title="Project Scheduling and Role Assignment Optimizer",
     layout="wide"
 )
+
+
+app_state.handle_login_choice()
 
 
 DEFAULT_WORKERS_PER_ROLE = 1
@@ -60,135 +65,13 @@ ENABLE_GEMINI_GENERATION = False # Set to true to enable gemimi generation code.
 ) = load_role_library()
 
 
-# Stored project, worker, and Q-matrix lists.
-if "projects" not in st.session_state:
-    st.session_state.projects = []
-
-if "workers" not in st.session_state:
-    st.session_state.workers = []
-
-if "q_matrix" not in st.session_state:
-    st.session_state.q_matrix = []
-
-if "projects_editor_version" not in st.session_state:
-    st.session_state.projects_editor_version = 0
-
-if "workers_editor_version" not in st.session_state:
-    st.session_state.workers_editor_version = 0
-
-if "q_matrix_editor_version" not in st.session_state:
-    st.session_state.q_matrix_editor_version = 0
-
-DEFAULTS = {
-    "completion_bonus_input": 0.25,
-    "preference_bonus_input": 0.20,
-    "priority_bonus_input": 0.50,
-    "start_week_penalty_input": 0.01
-}
-
-for key, value in DEFAULTS.items():
-    st.session_state.setdefault(key, value)
-
-def reset_weights_to_default():
-    for key, value in DEFAULTS.items():
-        st.session_state[key] = value
-
-def set_scenario_file_message(message, message_type="success"):
-    st.session_state.scenario_file_message = message
-    st.session_state.scenario_file_message_type = message_type
-
-def set_cloud_save_message(message, message_type="success"):
-    st.session_state.cloud_save_message = message
-    st.session_state.cloud_save_message_type = message_type
-
-def get_current_settings():
-    return {
-        "start_date_input": str(st.session_state.start_date_input),
-        "min_suitability_input": st.session_state.min_suitability_input,
-        "completion_bonus_input": st.session_state.completion_bonus_input,
-        "preference_bonus_input": st.session_state.preference_bonus_input,
-        "priority_bonus_input": st.session_state.priority_bonus_input,
-        "start_week_penalty_input": st.session_state.start_week_penalty_input,
-    }
-
-def apply_scenario_data_to_app(scenario_data):
-    """
-    Applies loaded scenario data to Streamlit session state.
-    Used by both file upload and cloud load.
-    """
-
-    st.session_state.projects = scenario_data.get("projects", [])
-    st.session_state.workers = scenario_data.get("workers", [])
-    st.session_state.q_matrix = scenario_data.get("q_matrix", [])
-
-    settings = scenario_data.get("settings", {})
-
-    if "start_date_input" in settings:
-        try:
-            st.session_state.start_date_input = date.fromisoformat(
-                str(settings["start_date_input"])
-            )
-        except ValueError:
-            pass
-
-    for key in [
-        "min_suitability_input",
-        "completion_bonus_input",
-        "preference_bonus_input",
-        "priority_bonus_input",
-        "start_week_penalty_input",
-    ]:
-        if key in settings:
-            try:
-                st.session_state[key] = float(settings[key])
-            except (TypeError, ValueError):
-                pass
-
-    st.session_state.projects_editor_version = (
-        st.session_state.get("projects_editor_version", 0) + 1
-    )
-
-    st.session_state.workers_editor_version = (
-        st.session_state.get("workers_editor_version", 0) + 1
-    )
-
-    st.session_state.q_matrix_editor_version = (
-        st.session_state.get("q_matrix_editor_version", 0) + 1
-    )
-
-def load_scenario_from_uploaded_file():
-    """
-    Loads projects, workers, Q matrix, and settings from an uploaded JSON scenario file.
-    """
-
-    uploaded_file = st.session_state.get("scenario_file_upload")
-
-    try:
-        scenario_data = scenario_files.read_uploaded_scenario_file(uploaded_file)
-    except ValueError as error:
-        set_scenario_file_message(str(error), "error")
-        return
-
-    apply_scenario_data_to_app(scenario_data)
-
-    set_scenario_file_message("Scenario file loaded.", "success")
+# Initialize Streamlit session state and restore autosaved data before widgets are created.
+app_state.initialize_session_state()
+app_state.restore_autosave_before_widgets()
 
 # Main app title.
 st.title("PSSRA Optimizer")
 st.caption("Select projects, assign workers, and build a feasible weekly schedule based on deadlines, workload, dependencies, and conflicts.")
-
-# Apply a pending scenario load before any widgets with saved keys are created.
-if "pending_scenario_to_apply" in st.session_state:
-    scenario_data = st.session_state.pop("pending_scenario_to_apply")
-
-    apply_scenario_data_to_app(scenario_data)
-
-    pending_message = st.session_state.pop(
-        "pending_scenario_message",
-        "Scenario loaded."
-    )
-
-    set_cloud_save_message(pending_message, "success")
 
 # -----------------------------
 # SIDEBAR SETTINGS
@@ -271,11 +154,32 @@ with st.sidebar:
 
         st.button(
             "Reset weights to default",
-            on_click=reset_weights_to_default,
+            on_click=app_state.reset_weights_to_default,
             help="Reset all objective weights to their default values."
         )
 
     st.divider()
+
+    if st.session_state.pop("autosave_after_widgets_created", False):
+        app_state.autosave_current_state(reason="scenario loaded")
+        st.session_state.last_autosaved_settings_snapshot = app_state.get_current_settings()
+
+        autosave_message = st.session_state.pop(
+            "autosave_after_widgets_message",
+            "Scenario loaded."
+        )
+
+        st.session_state.autosave_status_message = autosave_message
+        st.session_state.autosave_status_type = "success"
+
+    current_settings_snapshot = app_state.get_current_settings()
+
+    if (
+        app_state.current_app_has_content()
+        and st.session_state.get("last_autosaved_settings_snapshot") != current_settings_snapshot
+    ):
+        st.session_state.last_autosaved_settings_snapshot = current_settings_snapshot
+        app_state.autosave_current_state(reason="settings changed")
 
     st.metric("Projects", len(st.session_state.projects))
     st.metric("Workers", len(st.session_state.workers))
@@ -283,7 +187,7 @@ with st.sidebar:
 
     st.divider()
 
-    with st.expander("Scenario Save File", expanded=False):
+    with st.expander("Save Scenario Locally", expanded=False):
         st.caption(
             "Download a scenario file to save your current projects, workers, "
             "Q matrix, and settings. Upload the file later to continue from the same point."
@@ -311,7 +215,7 @@ with st.sidebar:
             projects=st.session_state.projects,
             workers=st.session_state.workers,
             q_matrix=st.session_state.q_matrix,
-            settings=get_current_settings()
+            settings=app_state.get_current_settings()
         )
 
         st.download_button(
@@ -344,7 +248,7 @@ with st.sidebar:
 
         st.button(
             "Load Scenario File",
-            on_click=load_scenario_from_uploaded_file,
+            on_click=app_state.load_scenario_from_uploaded_file,
             use_container_width=True
         )
 
@@ -398,7 +302,7 @@ with st.sidebar:
                     projects=st.session_state.projects,
                     workers=st.session_state.workers,
                     q_matrix=st.session_state.q_matrix,
-                    settings=get_current_settings()
+                    settings=app_state.get_current_settings()
                 )
 
                 cloud_save.save_scenario_to_cloud(
@@ -407,10 +311,10 @@ with st.sidebar:
                     scenario_json=scenario_data
                 )
 
-                set_cloud_save_message("Scenario saved to cloud.", "success")
+                app_state.set_cloud_save_message("Scenario saved to cloud.", "success")
 
             except Exception as error:
-                set_cloud_save_message(f"Cloud save failed: {error}", "error")
+                app_state.set_cloud_save_message(f"Cloud save failed: {error}", "error")
 
         if not cloud_has_content:
             st.info("Add projects, workers, or a Q matrix before saving to cloud.")
@@ -424,12 +328,12 @@ with st.sidebar:
                 )
 
                 if len(st.session_state.cloud_saved_scenarios) == 0:
-                    set_cloud_save_message("No cloud saves found for that access code.", "warning")
+                    app_state.set_cloud_save_message("No cloud saves found for that access code.", "warning")
                 else:
-                    set_cloud_save_message("Cloud saves found.", "success")
+                    app_state.set_cloud_save_message("Cloud saves found.", "success")
 
             except Exception as error:
-                set_cloud_save_message(f"Could not find cloud saves: {error}", "error")
+                app_state.set_cloud_save_message(f"Could not find cloud saves: {error}", "error")
 
         cloud_saved_scenarios = st.session_state.get("cloud_saved_scenarios", [])
 
@@ -460,7 +364,7 @@ with st.sidebar:
                     st.rerun()
 
                 except Exception as error:
-                    set_cloud_save_message(f"Cloud load failed: {error}", "error")
+                    app_state.set_cloud_save_message(f"Cloud load failed: {error}", "error")
 
             if st.button("Delete Selected Cloud Save", use_container_width=True):
                 try:
@@ -470,10 +374,10 @@ with st.sidebar:
                     )
 
                     st.session_state.cloud_saved_scenarios = []
-                    set_cloud_save_message("Cloud scenario deleted.", "success")
+                    app_state.set_cloud_save_message("Cloud scenario deleted.", "success")
 
                 except Exception as error:
-                    set_cloud_save_message(f"Cloud delete failed: {error}", "error")
+                    app_state.set_cloud_save_message(f"Cloud delete failed: {error}", "error")
 
         if "cloud_save_message" in st.session_state:
             message_type = st.session_state.get("cloud_save_message_type", "success")
@@ -484,6 +388,60 @@ with st.sidebar:
                 st.error(st.session_state.cloud_save_message)
             else:
                 st.success(st.session_state.cloud_save_message)
+
+    st.divider()
+
+    st.markdown("### Autosave")
+
+    if st.user.is_logged_in:
+        if "autosave_status_message" in st.session_state:
+            message_type = st.session_state.get("autosave_status_type", "success")
+
+            if message_type == "error":
+                st.error(st.session_state.autosave_status_message)
+            elif message_type == "warning":
+                st.warning(st.session_state.autosave_status_message)
+            else:
+                st.success(st.session_state.autosave_status_message)
+        else:
+            st.info("Autosave will begin after you add projects, workers, or a Q matrix.")
+
+        if st.button("Autosave Now", use_container_width=True):
+            app_state.autosave_current_state(reason="manual autosave")
+
+    else:
+        st.info("Autosave is disabled because you are not logged in.")
+
+        if st.button("Log in to enable autosave", use_container_width=True):
+            st.login()
+
+    st.divider()
+
+    st.markdown("### Clear Data")
+
+    confirm_clear_all = st.checkbox(
+        "I understand this will clear all current app data and delete my autosaved recovery state.",
+        key="confirm_clear_all_data"
+    )
+
+    if st.button(
+        "Clear All Data",
+        use_container_width=True,
+        disabled=not confirm_clear_all
+    ):
+        app_state.clear_all_app_data()
+        st.rerun()
+
+    if st.user.is_logged_in:
+        st.caption(f"Logged in as {app_state.get_logged_in_user_email()}")
+
+        if st.button("Log out"):
+            st.logout()
+    else:
+        st.caption("Using app without login. Autosave recovery is disabled.")
+
+        if st.button("Log in to enable autosave", use_container_width=True):
+            st.login()
 
 # -----------------------------
 # PAGE NAVIGATION
@@ -761,6 +719,7 @@ if active_page == "Projects":
                 st.session_state.q_matrix = []
 
                 st.success("Project added.")
+                app_state.autosave_current_state(reason="project added")
 
             else:
                 st.warning("This project has already been added.")
@@ -812,6 +771,7 @@ if active_page == "Projects":
                     st.session_state.q_matrix_editor_version += 1
 
                     st.success(f"Imported {len(imported_projects)} projects.")
+                    app_state.autosave_current_state(reason="projects imported")
                     st.rerun()
 
     # Clear all saved projects.
@@ -823,6 +783,7 @@ if active_page == "Projects":
         st.session_state.q_matrix_editor_version += 1
 
         st.success("Projects cleared.")
+        app_state.autosave_current_state(reason="projects cleared", delete_if_empty=True)
         st.rerun()
 
     # Display current saved projects.
@@ -864,7 +825,15 @@ if active_page == "Projects":
         default_role_hours_per_week=DEFAULT_ROLE_HOURS_PER_WEEK
     )
 
-    st.session_state.projects = helper.clean_records(edited_project_records)
+    cleaned_project_records = helper.clean_records(edited_project_records)
+
+    if cleaned_project_records != st.session_state.projects:
+        st.session_state.projects = cleaned_project_records
+        st.session_state.q_matrix = []
+        st.session_state.q_matrix_editor_version += 1
+        app_state.autosave_current_state(reason="project table edited", delete_if_empty=True)
+    else:
+        st.session_state.projects = cleaned_project_records
 
     st.divider()
 
@@ -969,6 +938,7 @@ if active_page == "Workers":
                 st.session_state.q_matrix = []
 
                 st.success("Worker added.")
+                app_state.autosave_current_state(reason="worker added")
 
             else:
                 st.warning("This worker has already been added.")
@@ -1014,6 +984,7 @@ if active_page == "Workers":
                     st.session_state.q_matrix_editor_version += 1
 
                     st.success(f"Imported {len(imported_workers)} workers.")
+                    app_state.autosave_current_state(reason="workers imported")
                     st.rerun()
 
     # Clear all saved workers.
@@ -1025,6 +996,7 @@ if active_page == "Workers":
         st.session_state.q_matrix_editor_version += 1
 
         st.success("Workers cleared.")
+        app_state.autosave_current_state(reason="workers cleared", delete_if_empty=True)
         st.rerun()
 
     # Display saved workers.
@@ -1047,9 +1019,17 @@ if active_page == "Workers":
     )
 
     # Save edited table rows back into session state.
-    st.session_state.workers = helper.clean_records(
+    cleaned_worker_records = helper.clean_records(
         edited_workers_df.to_dict("records")
     )
+
+    if cleaned_worker_records != st.session_state.workers:
+        st.session_state.workers = cleaned_worker_records
+        st.session_state.q_matrix = []
+        st.session_state.q_matrix_editor_version += 1
+        app_state.autosave_current_state(reason="worker table edited", delete_if_empty=True)
+    else:
+        st.session_state.workers = cleaned_worker_records
 
     st.divider()
 
@@ -1086,64 +1066,65 @@ if active_page == "Q Matrix":
             st.session_state.q_matrix_editor_version += 1
 
             st.success("Q matrix generated from worker skills, profiles, roles, and project context.")
+            app_state.autosave_current_state(reason="q matrix generated")
     
     st.caption("Creates initial qualification scores using worker profiles, skills, project roles, and the role library.")
 
-    if ENABLE_GEMINI_GENERATION:
-
-        try:
-            from gemini_q_generator import generate_q_matrix_with_gemini, gemini_api_key_available
-
-            # Check whether a Gemini API key is available.
-            if gemini_api_key_available():
-                st.success("Gemini API key detected.")
-
-                # Optional AI-based Q-generation button.
-                if st.button("Generate Q Matrix with Gemini"):
-                    
-                    # Warn users that Gemini is experimental and may use API quota.
-                    st.warning("Warning: experimental. Gemini Q generation may use API quota and should be reviewed before optimization.")
-
-                    # Checking if projects and workers have been inputted.
-                    if len(st.session_state.projects) == 0:
-                        st.warning("Please add at least one project first.")
-                    elif len(st.session_state.workers) == 0:
-                        st.warning("Please add at least one worker first.")
-                    else:
-                        try:
-                            # Generate Q values using Gemini.
-                            gemini_rows = generate_q_matrix_with_gemini(
-                                st.session_state.workers,
-                                st.session_state.projects,
-                                roles,
-                                Role_Descriptions,
-                                Keywords,
-                                Related_Skills
-                            )
-
-                            # Save the Gemini-generated rows.
-                            st.session_state.q_matrix = gemini_rows
-
-                            st.success(
-                                f"Q matrix generated with Gemini. Rows generated: {len(st.session_state.q_matrix)}"
-                            )
-
-                            # Rerun the app so generated Q matrix appears.
-                            st.rerun()
-
-                        # If Gemini fails, show the error without crashing the app.
-                        except Exception as e:
-                            st.error("Gemini Q generation failed. The model may not have returned valid JSON.")
-                            st.write(str(e))
-                            st.info("Try again with fewer workers/projects, or use the rule-based generator.")
-                    
-                    st.caption("Uses Gemini to estimate Q scores.")
-
-            else:
-                st.info("Gemini API key not detected. Rule-based Q generation is available.")
-
-        except Exception as e:
-            st.info("Gemini Q generation is currently unavailable. Rule-based Q generation is available.")
+#    if ENABLE_GEMINI_GENERATION:
+#
+#        try:
+#            from gemini_q_generator import generate_q_matrix_with_gemini, gemini_api_key_available
+#
+#            # Check whether a Gemini API key is available.
+#            if gemini_api_key_available():
+#                st.success("Gemini API key detected.")
+#
+#                # Optional AI-based Q-generation button.
+#                if st.button("Generate Q Matrix with Gemini"):
+#                    
+#                    # Warn users that Gemini is experimental and may use API quota.
+#                    st.warning("Warning: experimental. Gemini Q generation may use API quota and should be reviewed before optimization.")
+#
+#                    # Checking if projects and workers have been inputted.
+#                    if len(st.session_state.projects) == 0:
+#                        st.warning("Please add at least one project first.")
+#                    elif len(st.session_state.workers) == 0:
+#                        st.warning("Please add at least one worker first.")
+#                    else:
+#                        try:
+#                            # Generate Q values using Gemini.
+#                            gemini_rows = generate_q_matrix_with_gemini(
+#                                st.session_state.workers,
+#                                st.session_state.projects,
+#                                roles,
+#                                Role_Descriptions,
+#                                Keywords,
+#                                Related_Skills
+#                            )
+#
+#                            # Save the Gemini-generated rows.
+#                            st.session_state.q_matrix = gemini_rows
+#
+#                            st.success(
+#                                f"Q matrix generated with Gemini. Rows generated: {len(st.session_state.q_matrix)}"
+#                            )
+#
+#                            # Rerun the app so generated Q matrix appears.
+#                            st.rerun()
+#
+#                        # If Gemini fails, show the error without crashing the app.
+#                        except Exception as e:
+#                            st.error("Gemini Q generation failed. The model may not have returned valid JSON.")
+#                            st.write(str(e))
+#                            st.info("Try again with fewer workers/projects, or use the rule-based generator.")
+#                    
+#                    st.caption("Uses Gemini to estimate Q scores.")
+#
+#            else:
+#                st.info("Gemini API key not detected. Rule-based Q generation is available.")
+#
+#        except Exception as e:
+#            st.info("Gemini Q generation is currently unavailable. Rule-based Q generation is available.")
         
     st.divider()
 
@@ -1197,7 +1178,8 @@ if active_page == "Q Matrix":
                 st.session_state.q_matrix = combined_q_df.to_dict("records")
 
             st.success("Q matrix saved.")
-        st.caption("Save the Q matrix for optimization.")
+            app_state.autosave_current_state(reason="q matrix saved")
+        st.caption("Click Save Q Matrix to store these Q values for optimization.")
 
         # Clear current Q matrix if user wants to regenerate it.
         if st.button("Clear Saved Q Matrix"):
@@ -1208,6 +1190,7 @@ if active_page == "Q Matrix":
                 del st.session_state.q_project_filter
 
             st.success("Saved Q matrix cleared.")
+            app_state.autosave_current_state(reason="q matrix cleared", delete_if_empty=True)
             st.rerun()
         st.caption("Delete the saved Q matrix.")
 
