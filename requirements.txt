@@ -3,4 +3,5 @@ pandas
 pulp
 openpyxl
 google-genai
+supabase
 streamlit[auth]
