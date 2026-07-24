@@ -177,6 +177,18 @@ def load_scenario_from_uploaded_file():
 st.title("PSSRA Optimizer")
 st.caption("Select projects, assign workers, and build a feasible weekly schedule based on deadlines, workload, dependencies, and conflicts.")
 
+# Apply a pending scenario load before any widgets with saved keys are created.
+if "pending_scenario_to_apply" in st.session_state:
+    scenario_data = st.session_state.pop("pending_scenario_to_apply")
+
+    apply_scenario_data_to_app(scenario_data)
+
+    pending_message = st.session_state.pop(
+        "pending_scenario_message",
+        "Scenario loaded."
+    )
+
+    set_cloud_save_message(pending_message, "success")
 
 # -----------------------------
 # SIDEBAR SETTINGS
@@ -442,9 +454,10 @@ with st.sidebar:
                         access_code=cloud_access_code
                     )
 
-                    apply_scenario_data_to_app(scenario_data)
+                    st.session_state.pending_scenario_to_apply = scenario_data
+                    st.session_state.pending_scenario_message = "Cloud scenario loaded."
 
-                    set_cloud_save_message("Cloud scenario loaded.", "success")
+                    st.rerun()
 
                 except Exception as error:
                     set_cloud_save_message(f"Cloud load failed: {error}", "error")

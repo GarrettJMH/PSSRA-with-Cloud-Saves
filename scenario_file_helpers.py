@@ -1,6 +1,7 @@
 import json
 import re
-from datetime import datetime
+import math
+from datetime import datetime, date
 
 
 REQUIRED_SCENARIO_FIELDS = ["projects", "workers", "q_matrix", "settings"]
@@ -19,12 +20,67 @@ def make_safe_filename(name):
 
     return f"{cleaned_name}_Save.json"
 
+def make_json_safe(value):
+    """
+    Recursively converts values into JSON-safe values.
+    Replaces NaN, infinity, and pandas missing values with None.
+    Converts dates/datetimes to strings.
+    """
+
+    if isinstance(value, dict):
+        return {
+            str(key): make_json_safe(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+        return [
+            make_json_safe(item)
+            for item in value
+        ]
+
+    if isinstance(value, tuple):
+        return [
+            make_json_safe(item)
+            for item in value
+        ]
+
+    if value is None:
+        return None
+
+    # Handles pandas/numpy missing values such as NaN, NaT, and pd.NA
+    try:
+        if value != value:
+            return None
+    except Exception:
+        pass
+
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
+        return value
+
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+
+    # Handles numpy scalar values if they appear
+    try:
+        if hasattr(value, "item"):
+            return make_json_safe(value.item())
+    except Exception:
+        pass
+
+    if isinstance(value, (str, int, bool)):
+        return value
+
+    return str(value)
+
 def build_scenario_dictionary(
-        scenario_name,
-        projects,
-        workers,
-        q_matrix,
-        settings
+    scenario_name,
+    projects,
+    workers,
+    q_matrix,
+    settings
 ):
     """
     Builds a scenario dictionary that can be saved as JSON or stored in a database.
@@ -37,14 +93,14 @@ def build_scenario_dictionary(
         "app_name": "PSSRA Optimizer",
         "save_file_version": "1.0",
         "scenario_name": scenario_name,
-        "saved_at": datetime.now().isoformat(timespace="seconds"),
+        "saved_at": datetime.now().isoformat(timespec="seconds"),
         "projects": projects,
         "workers": workers,
         "q_matrix": q_matrix,
         "settings": settings
     }
 
-    return scenario_data
+    return make_json_safe(scenario_data)
 
 def build_scenario_save_data(
     scenario_name,
@@ -68,7 +124,7 @@ def build_scenario_save_data(
     return json.dumps(
         scenario_data,
         indent=2,
-        default=str
+        allow_nan=False
     ).encode("utf-8")
 
 
