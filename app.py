@@ -393,7 +393,7 @@ with st.sidebar:
 
     st.markdown("### Autosave")
 
-    if st.user.is_logged_in:
+    if app_state.is_user_logged_in():
         if "autosave_status_message" in st.session_state:
             message_type = st.session_state.get("autosave_status_type", "success")
 
@@ -412,15 +412,27 @@ with st.sidebar:
     else:
         st.info("Autosave is disabled because you are not logged in.")
 
-        if st.button("Log in to enable autosave", use_container_width=True):
-            st.login()
+        if app_state.streamlit_auth_is_configured():
+            if st.button("Log in to enable autosave", use_container_width=True):
+                st.login()
+        else:
+            st.caption("Login is not configured for this deployment.")
 
     st.divider()
 
     st.markdown("### Clear Data")
 
+    if app_state.is_user_logged_in():
+        clear_warning_text = (
+            "I understand this will clear all current app data and delete my autosaved recovery state."
+        )
+    else:
+        clear_warning_text = (
+            "I understand this will clear all current app data from this browser session."
+        )
+
     confirm_clear_all = st.checkbox(
-        "I understand this will clear all current app data and delete my autosaved recovery state.",
+        clear_warning_text,
         key="confirm_clear_all_data"
     )
 
@@ -432,16 +444,13 @@ with st.sidebar:
         app_state.clear_all_app_data()
         st.rerun()
 
-    if st.user.is_logged_in:
+    if app_state.is_user_logged_in():
         st.caption(f"Logged in as {app_state.get_logged_in_user_email()}")
 
         if st.button("Log out"):
             st.logout()
     else:
         st.caption("Using app without login. Autosave recovery is disabled.")
-
-        if st.button("Log in to enable autosave", use_container_width=True):
-            st.login()
 
 # -----------------------------
 # PAGE NAVIGATION
