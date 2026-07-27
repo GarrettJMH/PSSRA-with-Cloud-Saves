@@ -268,7 +268,8 @@ with st.sidebar:
         )
 
         st.warning(
-            "Prototype only: do not store sensitive real employee or student data."
+            "Anyone with the same access code can find and load scenarios saved with that code. "
+            "Use a unique access code and do not use sensitive real data."
         )
 
         cloud_scenario_name = st.text_input(
