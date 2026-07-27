@@ -84,8 +84,7 @@ with st.sidebar:
         value=date.today(),
         key="start_date_input",
         help=(
-            "This is the calendar date used for Week 1. "
-            "The optimizer still uses week numbers internally."
+            "This is the calendar date used as the start date for the planning schedule, which becomes the first day of Week 1 internally."
         )
     )
 
@@ -406,7 +405,7 @@ with st.sidebar:
         else:
             st.info("Autosave will begin after you add projects, workers, or a Q matrix.")
 
-        if st.button("Autosave Now", use_container_width=True):
+        if st.button("Manual Autosave", use_container_width=True):
             app_state.autosave_current_state(reason="manual autosave")
 
     else:
@@ -444,10 +443,14 @@ with st.sidebar:
         app_state.clear_all_app_data()
         st.rerun()
 
-    if app_state.is_user_logged_in():
-        st.caption(f"Logged in as {app_state.get_logged_in_user_email()}")
+    st.markdown("### Account")
 
-        if st.button("Log out"):
+    if app_state.is_user_logged_in():
+        st.success(f"Logged in as {app_state.get_logged_in_user_email()}")
+
+        st.caption("Closing the browset tab may keep you logged in. Log out if you are finished or using a shared device.")
+
+        if st.button("Log out", use_container_width=True):
             st.logout()
     else:
         st.caption("Using app without login. Autosave recovery is disabled.")
