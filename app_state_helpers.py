@@ -88,11 +88,11 @@ def handle_login_choice():
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("Log in and enable autosave", use_container_width=True):
+        if st.button("Log in"):
             st.login()
 
     with col2:
-        if st.button("Continue without autosave", use_container_width=True):
+        if st.button("Continue without logging in"):
             st.session_state.guest_mode = True
             st.rerun()
 
