@@ -449,7 +449,7 @@ with st.sidebar:
     if app_state.is_user_logged_in():
         st.success(f"Logged in as {app_state.get_logged_in_user_email()}")
 
-        st.caption("Closing the browset tab may keep you logged in. Log out if you are finished or using a shared device.")
+        st.caption("Closing the browser tab may keep you logged in. Log out if you are finished or using a shared device.")
 
         if st.button("Log out", use_container_width=True):
             st.logout()
@@ -1057,7 +1057,7 @@ if active_page == "Workers":
 # -----------------------------
 if active_page == "Q Matrix":
     st.subheader("Q Matrix Generation")
-    st.caption("Generate suitability scores, review them, and edit values before optimization.")
+    st.caption("Generate suitability scores, review them, and edit values before optimization. The higher the score, the better the worker-role match (capped between 0 and 1).")
 
     # Generate the Q matrix using the rule-based Q-generation.
     if st.button("Generate Q Matrix"):
