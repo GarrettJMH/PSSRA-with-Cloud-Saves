@@ -71,7 +71,7 @@ app_state.restore_autosave_before_widgets()
 
 # Main app title.
 st.title("PSSRA Optimizer")
-st.caption("Select projects, assign workers, and build a feasible weekly schedule based on deadlines, workload, dependencies, and conflicts.")
+st.caption("Select projects, assign workers, and build a feasible weekly schedule.")
 
 # -----------------------------
 # SIDEBAR SETTINGS
@@ -79,12 +79,33 @@ st.caption("Select projects, assign workers, and build a feasible weekly schedul
 with st.sidebar:
     st.header("Optimization Settings")
 
+    st.markdown("### Account")
+
+    if app_state.is_user_logged_in():
+        st.success(f"Logged in as {app_state.get_logged_in_user_email()}")
+
+        st.caption(
+            "Closing the browser tab may keep you logged in. "
+            "Log out if you are finished or using a shared device."
+        )
+
+        if st.button("Log out", use_container_width=True, key="top_logout_button"):
+            st.logout()
+    else:
+        st.caption("Using app without login. Autosaves are disabled.")
+
+        if app_state.streamlit_auth_is_configured():
+            if st.button("Log in to enable autosave", use_container_width=True, key="top_login_button"):
+                st.login()
+
+    st.divider()
+
     start_date = st.date_input(
         "Start date",
         value=date.today(),
         key="start_date_input",
         help=(
-            "This is the calendar date used as the start date for the planning schedule, which becomes the first day of Week 1 internally."
+            "This is the start date for the planning schedule, which becomes the first day of Week 1 internally. It defaults to today."
         )
     )
 
@@ -96,7 +117,7 @@ with st.sidebar:
         step=0.05,
         key="min_suitability_input",
         help=(
-            "Workers with a Q score below this value cannot be assigned that specific project. "
+            "Workers with a Q score below this value cannot be assigned that role. "
             "Higher values make assignment requirements stricter. Lower values make them more flexible."
         )
     )
@@ -111,7 +132,7 @@ with st.sidebar:
             step=0.05,
             key="completion_bonus_input",
             help=(
-                "Higher values encourage selecting more projects. Lower values make the optimizer less sensitive to the number of projects selected."
+                "During optimization, higher values encourage selecting more projects, while lower values make the optimizer care less about the number of projects selected."
             )
         )
 
@@ -123,7 +144,7 @@ with st.sidebar:
             step=0.05,
             key="preference_bonus_input",
             help=(
-                "Higher values encourage assigning workers to their preferred roles. Lower values make the optimizer less sensitive to worker preferences."
+                "During optimization, higher values encourage assigning workers to their preferred roles, while lower values make the optimizer care less about worker preferences."
             )
         )
 
@@ -135,7 +156,7 @@ with st.sidebar:
             step=0.05,
             key="priority_bonus_input",
             help=(
-                "Higher values encourage selecting higher-priority projects. Lower values make the optimizer less sensitive to project priority."
+                "During optimization, higher values encourage selecting higher-priority projects, while lower values make the optimizer care less about project priority."
             )
         )
 
@@ -147,7 +168,7 @@ with st.sidebar:
             step=0.005,
             key="start_week_penalty_input",
             help=(
-                "Higher values encourage starting projects earlier. Lower values make the optimizer less sensitive to start week."
+                "During optimization, higher values encourage starting projects earlier, while lower values make the optimizer care less about earlier starts."
             )
         )
 
@@ -188,7 +209,7 @@ with st.sidebar:
 
     with st.expander("Save Scenario Locally", expanded=False):
         st.caption(
-            "Download a scenario file to save your current projects, workers, "
+            "Download the curren scenario to save your current projects, workers, "
             "Q matrix, and settings. Upload the file later to continue from the same point."
         )
 
@@ -218,7 +239,7 @@ with st.sidebar:
         )
 
         st.download_button(
-            "Download Scenario Save File",
+            "Download Scenario",
             data=scenario_save_data,
             file_name=scenario_files.make_safe_filename(scenario_name),
             mime="application/json",
@@ -229,7 +250,7 @@ with st.sidebar:
         )
 
         if not scenario_has_content:
-            st.info("Add projects, workers, or a Q matrix before downloading a scenario save file.")
+            st.info("Add projects, workers, or a Q matrix before downloading the scenario save file.")
 
         st.divider()
 
@@ -239,10 +260,10 @@ with st.sidebar:
         st.markdown("#### Upload Saved Scenario")
 
         st.file_uploader(
-            "Upload scenario JSON file",
+            "Upload Scenario",
             type=["json"],
             key="scenario_file_upload",
-            help="Upload a scenario save file that was previously downloaded from this app."
+            help="Upload a JSON save file that was previously downloaded from this app."
         )
 
         st.button(
@@ -269,7 +290,7 @@ with st.sidebar:
 
         st.warning(
             "Anyone with the same access code can find and load scenarios saved with that code. "
-            "Use a unique access code and do not use sensitive real data."
+            "Use a unique access code and do not use sensitive data."
         )
 
         cloud_scenario_name = st.text_input(
@@ -282,7 +303,7 @@ with st.sidebar:
             "Access code",
             type="password",
             key="cloud_access_code_input",
-            help="Use the same access code later to find and load your saved scenarios."
+            help="Input your unique access code. Use the same access code later to find and load your saved scenarios."
         )
 
         cloud_has_content = (
@@ -420,7 +441,7 @@ with st.sidebar:
 
     st.divider()
 
-    st.markdown("### Clear Data")
+    st.markdown("### Clear All Data")
 
     if app_state.is_user_logged_in():
         clear_warning_text = (
@@ -443,18 +464,6 @@ with st.sidebar:
     ):
         app_state.clear_all_app_data()
         st.rerun()
-
-    st.markdown("### Account")
-
-    if app_state.is_user_logged_in():
-        st.success(f"Logged in as {app_state.get_logged_in_user_email()}")
-
-        st.caption("Closing the browser tab may keep you logged in. Log out if you are finished or using a shared device.")
-
-        if st.button("Log out", use_container_width=True):
-            st.logout()
-    else:
-        st.caption("Using app without login. Autosave recovery is disabled.")
 
 # -----------------------------
 # PAGE NAVIGATION
@@ -485,14 +494,14 @@ if active_page == "Overview":
 
     st.write(
         """
-        This prototype supports project selection, scheduling, and role assignment for a small department.
-        Users can enter or import projects and workers, generate a suitability-based Q matrix, review or edit Q values,
+        This prototype supports project selection, scheduling, and role assignment meant for a small UTS department. 
+        Users can enter or import projects and workers, generate a suitability-based qualification matrix (Q matrix), 
         and run an optimization model to select projects and assign workers to roles.
         """
     )
 
     st.info(
-        "Tip: Many fields include a small question-mark help icon. Hover over these icons for guidance on what each input means."
+        "Tip: Many fields include a small question-mark help icon. Hover over these icons for guidance on what each section means."
     )
 
     st.markdown("### Instructions")
@@ -502,8 +511,8 @@ if active_page == "Overview":
         1. Add or import projects.
         2. Add or import workers.
         3. Generate the Q matrix using the rule-based role library.
-        4. Review or edit Q values before optimization.
-        5. Run the optimizer and review the selected projects, schedule, assignments, and workload.
+        4. Review or edit Q values before optimization (if needed).
+        5. Run the optimizer and review the results breakdown.
         """
     )
 
@@ -513,35 +522,64 @@ if active_page == "Overview":
         """
         After optimization, the app shows which projects were selected, when each project starts,
         which weeks each project is active, which workers were assigned to each required role,
-        and how many weekly project hours each worker uses.
+        and how many weekly hours each worker works.
 
         A project may not be selected if there are not enough qualified workers, if Q scores are below the minimum assignment threshold,
-        or if deadline, dependency, conflict, availability, or workload constraints make the schedule fail.
+        or if deadline, dependency, conflict, availability, or workload constraints make the schedule fail. Most of the detailed results information can be found in a dropdown near the bottom of the results page.
         """
     )
 
     with st.expander("Current features"):
         st.markdown(
             """
+            **Data entry and import**
             - Manual project and worker entry
             - CSV/Excel project and worker import
             - Editable project and worker tables
+
+            **Suitability scoring**
             - Role-library-based Q-matrix generation
+            - Project-specific worker-project-role suitability scores
             - Editable Q matrix before optimization
+            - Explanation text for generated Q values
             - Adjustable minimum Q-score threshold
-            - PuLP-based project selection and role assignment
+
+            **Optimization model**
+            - PuLP-based project selection, scheduling, and role assignment
+            - Deadline-aware valid start weeks
+            - Deadline-adjusted project priority
+            - Adjustable objective score weights
             - Mandatory project constraints
             - Dependency constraints with finish-before-start scheduling
             - Conflict constraints using non-overlap scheduling
+            - Worker availability and weekly capacity constraints
+            - Role-specific workers-per-role requirements
+            - Role-specific weekly hour requirements with default fallback values
+
+            **Results and outputs**
+            - Selected project summary
+            - Project start weeks and active-week schedule
+            - Worker-to-role assignment results
             - Worker weekly-hour usage results
-            - Role-specific hours with a default fallback value
+            - Explanations for unselected projects
+            - Excel results export
+
+            **Saving and recovery**
+            - Local scenario download/upload using JSON save files
+            - Manual cloud saving using Supabase and an access code
+            - Optional login-based autosave and recovery
+            - Clear All Data option that also deletes autosaved recovery data for logged-in users
+
+            **Feedback**
+            - Feedback page linking to a prototype feedback form
             """
         )
 
     st.markdown("### Notes")
 
-    st.info(
-        "Generated Q values are initial rule-based estimates. Users should review and/or adjust them before running optimization."
+    st.markdown(
+        "Generated Q values are initial rule-based estimates. Users should review and/or adjust them before running optimization. "
+        "Each page will have a continue button to go to the next step. You can also go to each page using the buttons at the top."
     )
 
     st.divider()
@@ -628,14 +666,7 @@ if active_page == "Projects":
             f"Role hours per week (optional, default: {DEFAULT_ROLE_HOURS_PER_WEEK}):",
             placeholder=f"Example: Project Manager: 4, Programmer: 6. Default: {DEFAULT_ROLE_HOURS_PER_WEEK} hours/week per selected role.",
             key="specific_role_hours_input",
-            help=f"If left blank, each selected role defaults to {DEFAULT_ROLE_HOURS_PER_WEEK} hours/week."
-        )
-
-        st.info(
-            f"Defaults: if left blank, the app will use "
-            f"{DEFAULT_WORKERS_PER_ROLE} worker per selected role and "
-            f"{DEFAULT_ROLE_HOURS_PER_WEEK} hours/week per selected role. "
-            f"These defaults will appear in the project table after submission."
+            help=f"Enter the number of hours/week each role needs. If left blank, each role defaults to {DEFAULT_ROLE_HOURS_PER_WEEK} hours/week."
         )
 
         with st.expander("Advanced project relationship rules"):
@@ -644,7 +675,7 @@ if active_page == "Projects":
             mandatory = st.checkbox(
                 "Mandatory project (optional)",
                 key="project_mandatory_input",
-                help="Check if the project is mandatory and MUST be completed."
+                help="Check if the project is mandatory and must be completed."
             )
 
             # Allows the user to choose existing projects that this new project depends on.
@@ -745,7 +776,7 @@ if active_page == "Projects":
         st.text("Download project template:")
         with open("templates/project_template.xlsx", "rb") as file:
             st.download_button(
-                "Project Template",
+                "Project Template Download",
                 file,
                 "projects_template.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -755,8 +786,7 @@ if active_page == "Projects":
             "Upload project CSV or Excel file:",
             type=["csv", "xlsx"],
             key="project_csv_upload",
-            help="Required columns are Project name, Priority, Roles in that format."
-            " Optional columns include Project context, Workers per role, Role hours per week, Mandatory, Deadline, Estimated duration (weeks), Depends on, Conflicts with, Uploaded file."
+            help="Upload your CSV/Excel projects file here. The required columns are shown in the template."
         )
 
         # If a project file has been uploaded, show the uploaded file name.
@@ -964,7 +994,7 @@ if active_page == "Workers":
         st.text("Download worker template:")
         with open("templates/worker_template.xlsx", "rb") as file:
             st.download_button(
-                "Worker Template",
+                "Worker Template Download",
                 file,
                 "workers_template.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -974,8 +1004,7 @@ if active_page == "Workers":
             "Upload worker CSV or Excel file:",
             type=["csv", "xlsx"],
             key="worker_csv_upload",
-            help="Required columns are Worker name, Profile, Skills, Weekly hours in that format."
-            " Optional columns are Preferred roles and Unavailability."
+            help="Upload your CSV/Excel workers file here. The required columns are shown in the template."
         )
 
         # If a worker file has been uploaded, show the uploaded file name.
@@ -1057,7 +1086,7 @@ if active_page == "Workers":
 # -----------------------------
 if active_page == "Q Matrix":
     st.subheader("Q Matrix Generation")
-    st.caption("Generate suitability scores, review them, and edit values before optimization. The higher the score, the better the worker-role match (capped between 0 and 1).")
+    st.caption("Generate, review, and edit suitability scores before optimization. The higher the score, the more suited the worker is for the specific project-role (capped between 0 and 1).")
 
     # Generate the Q matrix using the rule-based Q-generation.
     if st.button("Generate Q Matrix"):
@@ -1078,7 +1107,7 @@ if active_page == "Q Matrix":
 
             st.session_state.q_matrix_editor_version += 1
 
-            st.success("Q matrix generated from worker skills, profiles, roles, and project context.")
+            st.success("Q matrix generated successfully.")
             app_state.autosave_current_state(reason="q matrix generated")
     
     st.caption("Creates initial qualification scores using worker profiles, skills, project roles, and the role library.")
@@ -1704,8 +1733,8 @@ if active_page == "Results":
 
                 st.markdown("#### Deadline Details")
                 st.caption(
-                    "Deadline-valid start weeks are based on project duration and deadline only. "
-                    "Dependencies, conflicts, and worker availability may affect the final chosen schedule."
+                    "Deadline-valid start weeks are based on project duration and project deadline. "
+                    "Dependencies, conflicts, and worker availability may affect the final chosen schedule, but don't affect the valid start weeks."
                 )
 
                 if len(selected_project_deadline_rows) > 0:
