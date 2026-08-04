@@ -285,8 +285,9 @@ with st.sidebar:
     with st.expander("Cloud Save", expanded=False):
         st.caption(
             "Experimental cloud save. Saves your current projects, workers, Q matrix, "
-            "and settings to Supabase using an access code."
-        )
+            "and settings to Supabase using an access code. Cloud save is a prototype feature. "
+            "If the cloud database is temporarily paused or unavailable, use the local scenario download/upload option as a backup."
+            )
 
         st.warning(
             "Anyone with the same access code can find and load scenarios saved with that code. "
