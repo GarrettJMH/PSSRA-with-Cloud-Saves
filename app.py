@@ -513,7 +513,8 @@ if active_page == "Overview":
         2. Add or import workers.
         3. Generate the Q matrix using the rule-based role library.
         4. Review or edit Q values before optimization (if needed).
-        5. Run the optimizer and review the results breakdown.
+        5. Save the Q matrix.
+        6. Run the optimizer and review the results breakdown.
         """
     )
 
