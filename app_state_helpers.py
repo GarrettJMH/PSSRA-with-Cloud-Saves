@@ -291,12 +291,19 @@ def restore_autosave_before_widgets():
             autosave_row = cloud_save.load_user_autosave(get_logged_in_user_id())
 
             if autosave_row is not None:
-                st.session_state.pending_scenario_to_apply = autosave_row["scenario_json"]
-                st.session_state.pending_scenario_message = "Recovered your previous autosaved work."
+                scenario_data = autosave_row.get("scenario_json")
+
+                if scenario_data is not None:
+                    st.session_state.pending_scenario_to_apply = scenario_data
+                    st.session_state.pending_scenario_message = (
+                        "Recovered your previous autosaved work."
+                    )
 
         except Exception as error:
-            st.session_state.autosave_status_message = f"Could not restore autosave: {error}"
-            st.session_state.autosave_status_type = "error"
+            st.session_state.autosave_status_message = (
+                f"Autosave restore unavailable: {error}"
+            )
+            st.session_state.autosave_status_type = "warning"
 
     if "pending_scenario_to_apply" in st.session_state:
         scenario_data = st.session_state.pop("pending_scenario_to_apply")
