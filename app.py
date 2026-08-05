@@ -209,7 +209,7 @@ with st.sidebar:
 
     with st.expander("Save Scenario Locally", expanded=False):
         st.caption(
-            "Download the curren scenario to save your current projects, workers, "
+            "Download the current scenario to save your current projects, workers, "
             "Q matrix, and settings. Upload the file later to continue from the same point."
         )
 
@@ -524,7 +524,7 @@ if active_page == "Overview":
         """
         After optimization, the app shows which projects were selected, when each project starts,
         which weeks each project is active, which workers were assigned to each required role,
-        and how many weekly hours each worker works.
+        and how many weekly hours each worker is assigned.
 
         A project may not be selected if there are not enough qualified workers, if Q scores are below the minimum assignment threshold,
         or if deadline, dependency, conflict, availability, or workload constraints make the schedule fail. Most of the detailed results information can be found in a dropdown near the bottom of the results page.
