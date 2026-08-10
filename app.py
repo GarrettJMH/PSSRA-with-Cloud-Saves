@@ -624,7 +624,7 @@ if active_page == "Projects":
         priority = st.slider(
             "Project priority:",
             min_value=1,
-            max_value=3,
+            max_value=5,
             value=1,
             key="project_priority_input",
             help="Set the importance of the project. Higher priority projects will have higher weight in the optimizer."
