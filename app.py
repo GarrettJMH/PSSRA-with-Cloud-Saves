@@ -68,6 +68,7 @@ ENABLE_GEMINI_GENERATION = False # Set to true to enable gemimi generation code.
 # Initialize Streamlit session state and restore autosaved data before widgets are created.
 app_state.initialize_session_state()
 app_state.restore_autosave_before_widgets()
+app_state.initialize_optimization_result_state()
 
 # Main app title.
 st.title("PSSRA Optimizer")
@@ -198,6 +199,7 @@ with st.sidebar:
         app_state.current_app_has_content()
         and st.session_state.get("last_autosaved_settings_snapshot") != current_settings_snapshot
     ):
+        app_state.clear_optimization_results()
         st.session_state.last_autosaved_settings_snapshot = current_settings_snapshot
         app_state.autosave_current_state(reason="settings changed")
 
@@ -764,6 +766,8 @@ if active_page == "Projects":
                 # Clearing old Q matrix.
                 st.session_state.q_matrix = []
 
+                app_state.clear_optimization_results()
+
                 st.success("Project added.")
                 app_state.autosave_current_state(reason="project added")
 
@@ -812,6 +816,8 @@ if active_page == "Projects":
                     st.session_state.projects.extend(imported_projects)
                     st.session_state.q_matrix = []
 
+                    app_state.clear_optimization_results()
+
                     st.session_state.projects_editor_version += 1
                     st.session_state.q_matrix_editor_version += 1
 
@@ -823,6 +829,7 @@ if active_page == "Projects":
     if st.button("Clear Projects"):
         st.session_state.projects = []
         st.session_state.q_matrix = []
+        app_state.clear_optimization_results()
 
         st.session_state.projects_editor_version += 1
         st.session_state.q_matrix_editor_version += 1
@@ -876,6 +883,7 @@ if active_page == "Projects":
         st.session_state.projects = cleaned_project_records
         st.session_state.q_matrix = []
         st.session_state.q_matrix_editor_version += 1
+        app_state.clear_optimization_results()
         app_state.autosave_current_state(reason="project table edited", delete_if_empty=True)
     else:
         st.session_state.projects = cleaned_project_records
@@ -1023,6 +1031,7 @@ if active_page == "Workers":
                 if len(imported_workers) > 0:
                     st.session_state.workers.extend(imported_workers)
                     st.session_state.q_matrix = []
+                    app_state.clear_optimization_results()
 
                     st.session_state.workers_editor_version += 1
                     st.session_state.q_matrix_editor_version += 1
@@ -1035,6 +1044,7 @@ if active_page == "Workers":
     if st.button("Clear Workers"):
         st.session_state.workers = []
         st.session_state.q_matrix = []
+        app_state.clear_optimization_results()
 
         st.session_state.workers_editor_version += 1
         st.session_state.q_matrix_editor_version += 1
@@ -1071,6 +1081,7 @@ if active_page == "Workers":
         st.session_state.workers = cleaned_worker_records
         st.session_state.q_matrix = []
         st.session_state.q_matrix_editor_version += 1
+        app_state.clear_optimization_results()
         app_state.autosave_current_state(reason="worker table edited", delete_if_empty=True)
     else:
         st.session_state.workers = cleaned_worker_records
@@ -1106,6 +1117,8 @@ if active_page == "Q Matrix":
                 st.session_state.workers,
                 st.session_state.projects
             )
+
+            app_state.clear_optimization_results()
 
             st.session_state.q_matrix_editor_version += 1
 
@@ -1220,6 +1233,7 @@ if active_page == "Q Matrix":
                 )
 
                 st.session_state.q_matrix = combined_q_df.to_dict("records")
+                app_state.clear_optimization_results()
 
             st.success("Q matrix saved.")
             app_state.autosave_current_state(reason="q matrix saved")
@@ -1229,6 +1243,7 @@ if active_page == "Q Matrix":
         if st.button("Clear Saved Q Matrix"):
             st.session_state.q_matrix = []
             st.session_state.q_matrix_editor_version += 1
+            app_state.clear_optimization_results()
 
             if "q_project_filter" in st.session_state:
                 del st.session_state.q_project_filter
@@ -1402,359 +1417,398 @@ if active_page == "Results":
                 )
                 st.stop()
 
-            # Build weekly workload rows based on the optimizer's selected schedule.
-            weekly_hours_usage_rows = helper.build_weekly_hours_usage(
-                assignments,
-                projects_data,
-                weekly_hours_data,
-                project_schedule,
-                worker_unavailability_data,
-                worker_weekly_capacity_data
-            )
-
-            # Display message if optimization worked.
-            st.success("Optimization successful.")
-
-            # -----------------------------
-            # SUMMARY METRICS
-            # -----------------------------
-            st.markdown("### Summary")
-
-            # Count how many projects were entered by the user.
-            total_entered_projects = len(projects_data)
-
-            # Count how many projects were selected by the optimizer.
-            total_selected_projects = len(selected_projects)
-
-            # Count how many worker-role assignments were actually made.
-            # Assignments are now stored as lists because a role may need multiple workers.
-            total_assignments = sum(
-                len(assigned_workers) if isinstance(assigned_workers, list) else 1
-                for project_assignments in assignments.values()
-                for assigned_workers in project_assignments.values()
-            )
-
-            # Count how many worker-role assignments are required for selected projects.
-            # This uses role_requirements so roles needing 2+ workers are counted correctly.
-            total_required_roles_for_selected_projects = sum(
-                int(projects_data[project].get("role_requirements", {}).get(role, 1))
-                for project in selected_projects
-                for role in projects_data[project]["required_roles"]
-            )
-
-            st.markdown("### What happened?")
-
-            st.write(
-                f"The optimizer selected **{total_selected_projects} out of {total_entered_projects}** projects "
-                f"and made **{total_assignments} role assignments**."
-            )
-
-            st.write(
-                "The schedule below shows when each selected project is planned to run. "
-                "Detailed deadline rules, project relationships, and worker workload information are available in the expandable sections below."
-            )
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric(
-                    "Selected Projects",
-                    f"{total_selected_projects} / {total_entered_projects}"
-                )
-                st.caption("Projects selected out of total entered projects.")
-
-            with col2:
-                st.metric(
-                    "Role Assignments",
-                    f"{total_assignments} / {total_required_roles_for_selected_projects}"
-                )
-                st.caption("Total role assignments for selected projects.")
-
-            with col3:
-                st.metric("Objective Score", f"{objective_score:.2f}")
-                st.caption("Overall optimization score.")
-
-            with st.expander("Optimization settings used", expanded=False):
-                st.write(f"Minimum Q score: {st.session_state.min_suitability_input}")
-                st.write(f"Project completion bonus: {st.session_state.completion_bonus_input}")
-                st.write(f"Worker preference bonus: {st.session_state.preference_bonus_input}")
-                st.write(f"Project priority bonus: {st.session_state.priority_bonus_input}")
-                st.write(f"Start week penalty: {st.session_state.start_week_penalty_input}")
-
-            # Export button location
-            export_placeholder = st.empty()
-
-            st.divider()
-
-            unselected_project_explanations = helper.explain_unselected_projects(
-                all_projects=list(projects_data.keys()),
+            app_state.save_optimization_results(
                 selected_projects=selected_projects,
+                assignments=assignments,
+                objective_score=objective_score,
+                project_schedule=project_schedule,
                 projects_data=projects_data,
                 workers_data=workers_data,
                 q_data=q_data,
+                weekly_hours_data=weekly_hours_data,
+                worker_unavailability_data=worker_unavailability_data,
+                worker_weekly_capacity_data=worker_weekly_capacity_data,
+                mandatory_projects=mandatory_projects,
                 project_dependencies=project_dependencies,
                 project_conflicts=project_conflicts,
-                project_schedule=project_schedule,
-                min_suitability=st.session_state.min_suitability_input,
-                weekly_hours=weekly_hours_data,
+                start_date=start_date,
             )
 
-            st.markdown("### Why some projects were not selected")
+    if st.session_state.optimization_results is not None:
+        results = st.session_state.optimization_results
 
-            st.info(
-                "Projects may be unselected because of Q-score thresholds, worker weekly capacity, "
-                "deadlines, dependencies, conflicts, or because selecting other projects produced a better overall objective score."
+        selected_projects = results["selected_projects"]
+        assignments = results["assignments"]
+        objective_score = results["objective_score"]
+        project_schedule = results["project_schedule"]
+        projects_data = results["projects_data"]
+        workers_data = results["workers_data"]
+        q_data = results["q_data"]
+        weekly_hours_data = results["weekly_hours_data"]
+        worker_unavailability_data = results["worker_unavailability_data"]
+        worker_weekly_capacity_data = results["worker_weekly_capacity_data"]
+        mandatory_projects = results["mandatory_projects"]
+        project_dependencies = results["project_dependencies"]
+        project_conflicts = results["project_conflicts"]
+        start_date = results["start_date"]
+
+        weekly_hours_usage_rows = helper.build_weekly_hours_usage(
+            assignments,
+            projects_data,
+            weekly_hours_data,
+            project_schedule,
+            worker_unavailability_data,
+            worker_weekly_capacity_data
+        )
+
+        st.success(st.session_state.get("optimization_status_message", "Optimization successful."))
+        st.caption(
+            "Results will be cleared if projects, workers, Q values, start date, or optimization settings are changed."
+        )
+
+        # -----------------------------
+        # SUMMARY METRICS
+        # -----------------------------
+        st.markdown("### Summary")
+
+        # Count how many projects were entered by the user.
+        total_entered_projects = len(projects_data)
+
+        # Count how many projects were selected by the optimizer.
+        total_selected_projects = len(selected_projects)
+
+        # Count how many worker-role assignments were actually made.
+        # Assignments are now stored as lists because a role may need multiple workers.
+        total_assignments = sum(
+            len(assigned_workers) if isinstance(assigned_workers, list) else 1
+            for project_assignments in assignments.values()
+            for assigned_workers in project_assignments.values()
+        )
+
+        # Count how many worker-role assignments are required for selected projects.
+        # This uses role_requirements so roles needing 2+ workers are counted correctly.
+        total_required_roles_for_selected_projects = sum(
+            int(projects_data[project].get("role_requirements", {}).get(role, 1))
+            for project in selected_projects
+            for role in projects_data[project]["required_roles"]
+        )
+
+        st.markdown("### What happened?")
+
+        st.write(
+            f"The optimizer selected **{total_selected_projects} out of {total_entered_projects}** projects "
+            f"and made **{total_assignments} role assignments**."
+        )
+
+        st.write(
+            "The schedule below shows when each selected project is planned to run. "
+            "Detailed deadline rules, project relationships, and worker workload information are available in the expandable sections below."
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Selected Projects",
+                f"{total_selected_projects} / {total_entered_projects}"
             )
+            st.caption("Projects selected out of total entered projects.")
 
-            if len(unselected_project_explanations) > 0:
-                st.dataframe(
-                    unselected_project_explanations,
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("All entered projects were selected.")
-
-            # -----------------------------
-            # MAIN SCHEDULE OVERVIEW
-            # -----------------------------
-            st.markdown("### Schedule Overview")
-            st.caption(
-                "This table shows the projects selected by the optimizer, when they are scheduled, "
-                "and which roles are required."
+        with col2:
+            st.metric(
+                "Role Assignments",
+                f"{total_assignments} / {total_required_roles_for_selected_projects}"
             )
+            st.caption("Total role assignments for selected projects.")
 
-            main_results_rows = []
+        with col3:
+            st.metric("Objective Score", f"{objective_score:.2f}")
+            st.caption("Overall optimization score.")
 
-            for project in selected_projects:
-                active_weeks = project_schedule.get(project, {}).get("Scheduled Active Weeks", [])
+        with st.expander("Optimization settings used", expanded=False):
+            st.write(f"Minimum Q score: {st.session_state.min_suitability_input}")
+            st.write(f"Project completion bonus: {st.session_state.completion_bonus_input}")
+            st.write(f"Worker preference bonus: {st.session_state.preference_bonus_input}")
+            st.write(f"Project priority bonus: {st.session_state.priority_bonus_input}")
+            st.write(f"Start week penalty: {st.session_state.start_week_penalty_input}")
 
-                if active_weeks:
-                    active_weeks = sorted(active_weeks)
+        # Export button location
+        export_placeholder = st.empty()
 
-                    first_week = active_weeks[0]
-                    last_week = active_weeks[-1]
+        st.divider()
 
-                    calendar_date_range = helper.week_to_date_range(first_week, start_date).split(" to ")[0]
-                    calendar_date_range += " to "
-                    calendar_date_range += helper.week_to_date_range(last_week, start_date).split(" to ")[1]
+        unselected_project_explanations = helper.explain_unselected_projects(
+            all_projects=list(projects_data.keys()),
+            selected_projects=selected_projects,
+            projects_data=projects_data,
+            workers_data=workers_data,
+            q_data=q_data,
+            project_dependencies=project_dependencies,
+            project_conflicts=project_conflicts,
+            project_schedule=project_schedule,
+            min_suitability=st.session_state.min_suitability_input,
+            weekly_hours=weekly_hours_data,
+        )
 
-                    if active_weeks == list(range(first_week, last_week + 1)):
-                        active_week_display = f"{first_week}–{last_week}"
-                    else:
-                        active_week_display = ", ".join(str(week) for week in active_weeks)
+        st.markdown("### Why some projects were not selected")
+
+        st.info(
+            "Projects may be unselected because of Q-score thresholds, worker weekly capacity, "
+            "deadlines, dependencies, conflicts, or because selecting other projects produced a better overall objective score."
+        )
+
+        if len(unselected_project_explanations) > 0:
+            st.dataframe(
+                unselected_project_explanations,
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("All entered projects were selected.")
+
+        # -----------------------------
+        # MAIN SCHEDULE OVERVIEW
+        # -----------------------------
+        st.markdown("### Schedule Overview")
+        st.caption(
+            "This table shows the projects selected by the optimizer, when they are scheduled, "
+            "and which roles are required."
+        )
+
+        main_results_rows = []
+
+        for project in selected_projects:
+            active_weeks = project_schedule.get(project, {}).get("Scheduled Active Weeks", [])
+
+            if active_weeks:
+                active_weeks = sorted(active_weeks)
+
+                first_week = active_weeks[0]
+                last_week = active_weeks[-1]
+
+                calendar_date_range = helper.week_to_date_range(first_week, start_date).split(" to ")[0]
+                calendar_date_range += " to "
+                calendar_date_range += helper.week_to_date_range(last_week, start_date).split(" to ")[1]
+
+                if active_weeks == list(range(first_week, last_week + 1)):
+                    active_week_display = f"{first_week}–{last_week}"
                 else:
-                    active_week_display = ""
-                    calendar_date_range = ""
+                    active_week_display = ", ".join(str(week) for week in active_weeks)
+            else:
+                active_week_display = ""
+                calendar_date_range = ""
 
-                main_results_rows.append({
-                    "Project": project,
-                    "Total Priority": projects_data[project].get(
-                        "effective_priority",
-                        projects_data[project]["priority"]
+            main_results_rows.append({
+                "Project": project,
+                "Total Priority": projects_data[project].get(
+                    "effective_priority",
+                    projects_data[project]["priority"]
 ),                  "Start Week": project_schedule.get(project, {}).get("Start Week", ""),
-                    "Active Weeks": active_week_display,
-                    "Calendar Dates": calendar_date_range,
-                    "Required Roles": ", ".join(projects_data[project]["required_roles"])
+                "Active Weeks": active_week_display,
+                "Calendar Dates": calendar_date_range,
+                "Required Roles": ", ".join(projects_data[project]["required_roles"])
+            })
+
+        if len(main_results_rows) > 0:
+            st.dataframe(main_results_rows, use_container_width=True, hide_index=True)
+        else:
+            st.info("No projects were selected.")
+
+        st.divider()
+
+
+        # -----------------------------
+        # ASSIGNMENTS BY PROJECT
+        # -----------------------------
+        st.markdown("### Assignments by Project")
+        st.caption("Open a project to see which worker was assigned to each required role.")
+
+        assignment_rows = []
+
+        for project, project_assignments in assignments.items():
+            specific_role_hours = projects_data[project].get("specific_role_hours", {})
+            default_role_hours = projects_data[project].get("role_hours_per_week", DEFAULT_ROLE_HOURS_PER_WEEK)
+
+            for role, assigned_workers in project_assignments.items():
+                role_hours = specific_role_hours.get(role, default_role_hours)
+
+                if not isinstance(assigned_workers, list):
+                    assigned_workers = [assigned_workers]
+
+                assignment_rows.append({
+                    "Project": project,
+                    "Role": role,
+                    "Assigned Workers": ", ".join(str(worker) for worker in assigned_workers),
+                    "Workers Assigned": len(assigned_workers),
+                    "Hours/Week Each": role_hours,
+                    "Total Role Hours/Week": role_hours * len(assigned_workers)
                 })
 
-            if len(main_results_rows) > 0:
-                st.dataframe(main_results_rows, use_container_width=True, hide_index=True)
-            else:
-                st.info("No projects were selected.")
-
-            st.divider()
-
-
-            # -----------------------------
-            # ASSIGNMENTS BY PROJECT
-            # -----------------------------
-            st.markdown("### Assignments by Project")
-            st.caption("Open a project to see which worker was assigned to each required role.")
-
-            assignment_rows = []
-
-            for project, project_assignments in assignments.items():
+        for project, project_assignments in assignments.items():
+            with st.expander(project, expanded=False):
                 specific_role_hours = projects_data[project].get("specific_role_hours", {})
                 default_role_hours = projects_data[project].get("role_hours_per_week", DEFAULT_ROLE_HOURS_PER_WEEK)
 
-                for role, assigned_workers in project_assignments.items():
-                    role_hours = specific_role_hours.get(role, default_role_hours)
+                if len(project_assignments) == 0:
+                    st.info("No assignments were made for this project.")
+                else:
+                    for role, assigned_workers in project_assignments.items():
+                        role_hours = specific_role_hours.get(role, default_role_hours)
 
-                    if not isinstance(assigned_workers, list):
-                        assigned_workers = [assigned_workers]
+                        if not isinstance(assigned_workers, list):
+                            assigned_workers = [assigned_workers]
 
-                    assignment_rows.append({
-                        "Project": project,
-                        "Role": role,
-                        "Assigned Workers": ", ".join(str(worker) for worker in assigned_workers),
-                        "Workers Assigned": len(assigned_workers),
-                        "Hours/Week Each": role_hours,
-                        "Total Role Hours/Week": role_hours * len(assigned_workers)
-                    })
+                        worker_display = ", ".join(str(worker) for worker in assigned_workers)
+                        st.write(
+                            f"**{role}:** {worker_display} — "
+                            f"{role_hours} hours/week each "
+                            f"({role_hours * len(assigned_workers)} total hours/week)"
+                        )
 
-            for project, project_assignments in assignments.items():
-                with st.expander(project, expanded=False):
-                    specific_role_hours = projects_data[project].get("specific_role_hours", {})
-                    default_role_hours = projects_data[project].get("role_hours_per_week", DEFAULT_ROLE_HOURS_PER_WEEK)
-
-                    if len(project_assignments) == 0:
-                        st.info("No assignments were made for this project.")
-                    else:
-                        for role, assigned_workers in project_assignments.items():
-                            role_hours = specific_role_hours.get(role, default_role_hours)
-
-                            if not isinstance(assigned_workers, list):
-                                assigned_workers = [assigned_workers]
-
-                            worker_display = ", ".join(str(worker) for worker in assigned_workers)
-                            st.write(
-                                f"**{role}:** {worker_display} — "
-                                f"{role_hours} hours/week each "
-                                f"({role_hours * len(assigned_workers)} total hours/week)"
-                            )
-
-            st.divider()
+        st.divider()
 
 
-            # -----------------------------
-            # BUILD DETAILED DATA TABLES
-            # -----------------------------
+        # -----------------------------
+        # BUILD DETAILED DATA TABLES
+        # -----------------------------
 
-            # Deadline details table.
-            selected_project_deadline_rows = []
+        # Deadline details table.
+        selected_project_deadline_rows = []
 
-            for project in selected_projects:
-                selected_project_deadline_rows.append({
-                    "Project": project,
-                    "Input Priority": projects_data[project].get("priority", ""),
-                    "Deadline Urgency": projects_data[project].get("deadline_urgency", 0),
-                    "Total Priority": projects_data[project].get(
-                        "effective_priority",
-                        projects_data[project].get("priority", "")
-                    ),
-                    "Weeks Until Due": projects_data[project].get("weeks_until_due", ""),
-                    "Duration Weeks": projects_data[project].get("estimated_duration_weeks", 1),
-                    "Deadline-Valid Start Weeks": ", ".join(
-                        str(week)
-                        for week in projects_data[project].get("valid_start_weeks", [])
-                    )
-                })
-
-
-            # Project relationship rules table.
-            relationship_rows = []
-
-            for project_name, project_data in projects_data.items():
-                depends_on = []
-                conflicts_with = []
-
-                for dependent_project, required_project in project_dependencies:
-                    if dependent_project == project_name:
-                        depends_on.append(required_project)
-
-                for project_a, project_b in project_conflicts:
-                    if project_a == project_name:
-                        conflicts_with.append(project_b)
-                    elif project_b == project_name:
-                        conflicts_with.append(project_a)
-
-                relationship_rows.append({
-                    "Project": project_name,
-                    "Depends On": ", ".join(depends_on) if depends_on else "None",
-                    "Conflicts With": ", ".join(conflicts_with) if conflicts_with else "None",
-                    "Mandatory": "Yes" if project_name in mandatory_projects else "No"
-                })
+        for project in selected_projects:
+            selected_project_deadline_rows.append({
+                "Project": project,
+                "Input Priority": projects_data[project].get("priority", ""),
+                "Deadline Urgency": projects_data[project].get("deadline_urgency", 0),
+                "Total Priority": projects_data[project].get(
+                    "effective_priority",
+                    projects_data[project].get("priority", "")
+                ),
+                "Weeks Until Due": projects_data[project].get("weeks_until_due", ""),
+                "Duration Weeks": projects_data[project].get("estimated_duration_weeks", 1),
+                "Deadline-Valid Start Weeks": ", ".join(
+                    str(week)
+                    for week in projects_data[project].get("valid_start_weeks", [])
+                )
+            })
 
 
-            # -----------------------------
-            # EXPORT RESULTS
-            # -----------------------------
+        # Project relationship rules table.
+        relationship_rows = []
 
-            summary_rows = helper.build_summary_rows(
-                total_selected_projects=total_selected_projects,
-                total_entered_projects=total_entered_projects,
-                total_assignments=total_assignments,
-                total_required_roles_for_selected_projects=total_required_roles_for_selected_projects,
-                objective_score=objective_score
+        for project_name, project_data in projects_data.items():
+            depends_on = []
+            conflicts_with = []
+
+            for dependent_project, required_project in project_dependencies:
+                if dependent_project == project_name:
+                    depends_on.append(required_project)
+
+            for project_a, project_b in project_conflicts:
+                if project_a == project_name:
+                    conflicts_with.append(project_b)
+                elif project_b == project_name:
+                    conflicts_with.append(project_a)
+
+            relationship_rows.append({
+                "Project": project_name,
+                "Depends On": ", ".join(depends_on) if depends_on else "None",
+                "Conflicts With": ", ".join(conflicts_with) if conflicts_with else "None",
+                "Mandatory": "Yes" if project_name in mandatory_projects else "No"
+            })
+
+
+        # -----------------------------
+        # EXPORT RESULTS
+        # -----------------------------
+
+        summary_rows = helper.build_summary_rows(
+            total_selected_projects=total_selected_projects,
+            total_entered_projects=total_entered_projects,
+            total_assignments=total_assignments,
+            total_required_roles_for_selected_projects=total_required_roles_for_selected_projects,
+            objective_score=objective_score
+        )
+
+        settings_rows = helper.build_settings_rows(
+            min_suitability=st.session_state.min_suitability_input,
+            completion_bonus_weight=st.session_state.completion_bonus_input,
+            preference_bonus_weight=st.session_state.preference_bonus_input,
+            priority_bonus_weight=st.session_state.priority_bonus_input,
+            start_week_penalty_weight=st.session_state.start_week_penalty_input
+        )
+
+        excel_file = helper.create_results(
+            summary_rows=summary_rows,
+            settings_rows=settings_rows,
+            schedule_rows=main_results_rows,
+            assignment_rows=assignment_rows,
+            unselected_rows=unselected_project_explanations,
+            workload_rows=weekly_hours_usage_rows,
+            deadline_rows=selected_project_deadline_rows,
+            relationship_rows=relationship_rows
+        )
+
+        with export_placeholder.container():
+
+            st.markdown("### Export Results")
+
+            st.download_button(
+                label="Download Results (Excel)",
+                data=excel_file,
+                file_name="Optimization_Results.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                on_click="ignore"
             )
 
-            settings_rows = helper.build_settings_rows(
-                min_suitability=st.session_state.min_suitability_input,
-                completion_bonus_weight=st.session_state.completion_bonus_input,
-                preference_bonus_weight=st.session_state.preference_bonus_input,
-                priority_bonus_weight=st.session_state.priority_bonus_input,
-                start_week_penalty_weight=st.session_state.start_week_penalty_input
+        # -----------------------------
+        # TECHNICAL DETAILS
+        # -----------------------------
+        with st.expander("View detailed optimization data"):
+            st.caption(
+                "These tables provide the more technical details behind the result. "
+                "They are hidden by default to keep the main results easier to read."
             )
 
-            excel_file = helper.create_results(
-                summary_rows=summary_rows,
-                settings_rows=settings_rows,
-                schedule_rows=main_results_rows,
-                assignment_rows=assignment_rows,
-                unselected_rows=unselected_project_explanations,
-                workload_rows=weekly_hours_usage_rows,
-                deadline_rows=selected_project_deadline_rows,
-                relationship_rows=relationship_rows
+            st.markdown("#### Full Role Assignment Table")
+
+            if len(assignment_rows) > 0:
+                st.dataframe(assignment_rows, use_container_width=True, hide_index=True)
+            else:
+                st.info("No role assignments were made.")
+
+            st.markdown("#### Worker Weekly Workload")
+
+            if len(weekly_hours_usage_rows) > 0:
+                st.dataframe(weekly_hours_usage_rows, use_container_width=True, hide_index=True)
+            else:
+                st.info("No weekly hours were used.")
+
+            st.markdown("#### Deadline Details")
+            st.caption(
+                "Deadline-valid start weeks are based on project duration and project deadline. "
+                "Dependencies, conflicts, and worker availability may affect the final chosen schedule, but don't affect the valid start weeks."
             )
 
-            with export_placeholder.container():
+            if len(selected_project_deadline_rows) > 0:
+                st.dataframe(selected_project_deadline_rows, use_container_width=True, hide_index=True)
+            else:
+                st.info("No deadline details available.")
 
-                st.markdown("### Export Results")
+            st.markdown("#### Project Relationship Rules")
+            st.caption(
+                "Dependencies require one project to be scheduled after another. "
+                "Conflicts prevent projects from being active in the same week. "
+                "Mandatory projects must be selected if the model is feasible."
+            )
 
-                st.download_button(
-                    label="Download Results (Excel)",
-                    data=excel_file,
-                    file_name="Optimization_Results.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    on_click="ignore"
-                )
+            if len(relationship_rows) > 0:
+                st.dataframe(relationship_rows, use_container_width=True, hide_index=True)
+            else:
+                st.info("No project relationship rules were entered.")
 
-            # -----------------------------
-            # TECHNICAL DETAILS
-            # -----------------------------
-            with st.expander("View detailed optimization data"):
-                st.caption(
-                    "These tables provide the more technical details behind the result. "
-                    "They are hidden by default to keep the main results easier to read."
-                )
-
-                st.markdown("#### Full Role Assignment Table")
-
-                if len(assignment_rows) > 0:
-                    st.dataframe(assignment_rows, use_container_width=True, hide_index=True)
-                else:
-                    st.info("No role assignments were made.")
-
-                st.markdown("#### Worker Weekly Workload")
-
-                if len(weekly_hours_usage_rows) > 0:
-                    st.dataframe(weekly_hours_usage_rows, use_container_width=True, hide_index=True)
-                else:
-                    st.info("No weekly hours were used.")
-
-                st.markdown("#### Deadline Details")
-                st.caption(
-                    "Deadline-valid start weeks are based on project duration and project deadline. "
-                    "Dependencies, conflicts, and worker availability may affect the final chosen schedule, but don't affect the valid start weeks."
-                )
-
-                if len(selected_project_deadline_rows) > 0:
-                    st.dataframe(selected_project_deadline_rows, use_container_width=True, hide_index=True)
-                else:
-                    st.info("No deadline details available.")
-
-                st.markdown("#### Project Relationship Rules")
-                st.caption(
-                    "Dependencies require one project to be scheduled after another. "
-                    "Conflicts prevent projects from being active in the same week. "
-                    "Mandatory projects must be selected if the model is feasible."
-                )
-
-                if len(relationship_rows) > 0:
-                    st.dataframe(relationship_rows, use_container_width=True, hide_index=True)
-                else:
-                    st.info("No project relationship rules were entered.")
+    else:
+        st.info("Run the optimizer to generate results.")
 
     st.button(
                 "Continue to Feedback",

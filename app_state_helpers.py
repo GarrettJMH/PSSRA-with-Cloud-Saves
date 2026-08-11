@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import date
+from copy import deepcopy
 
 import scenario_file_helpers as scenario_files
 import cloud_save_helpers as cloud_save
@@ -352,3 +353,69 @@ def clear_all_app_data():
     else:
         st.session_state.autosave_status_message = "All local session data cleared."
         st.session_state.autosave_status_type = "success"
+
+    clear_optimization_results()
+
+
+def initialize_optimization_result_state():
+    if "optimization_results" not in st.session_state:
+        st.session_state.optimization_results = None
+
+    if "optimization_input_snapshot" not in st.session_state:
+        st.session_state.optimization_input_snapshot = None
+
+    if "optimization_status_message" not in st.session_state:
+        st.session_state.optimization_status_message = ""
+
+
+def get_optimization_input_snapshot():
+    return {
+        "projects": deepcopy(st.session_state.projects),
+        "workers": deepcopy(st.session_state.workers),
+        "q_matrix": deepcopy(st.session_state.q_matrix),
+        "settings": deepcopy(get_current_settings()),
+        "start_date": st.session_state.get("start_date_input"),
+    }
+
+
+def clear_optimization_results():
+    st.session_state.optimization_results = None
+    st.session_state.optimization_input_snapshot = None
+    st.session_state.optimization_status_message = ""
+
+
+def save_optimization_results(
+    selected_projects,
+    assignments,
+    objective_score,
+    project_schedule,
+    projects_data,
+    workers_data,
+    q_data,
+    weekly_hours_data,
+    worker_unavailability_data,
+    worker_weekly_capacity_data,
+    mandatory_projects,
+    project_dependencies,
+    project_conflicts,
+    start_date,
+):
+    st.session_state.optimization_results = {
+        "selected_projects": selected_projects,
+        "assignments": assignments,
+        "objective_score": objective_score,
+        "project_schedule": project_schedule,
+        "projects_data": projects_data,
+        "workers_data": workers_data,
+        "q_data": q_data,
+        "weekly_hours_data": weekly_hours_data,
+        "worker_unavailability_data": worker_unavailability_data,
+        "worker_weekly_capacity_data": worker_weekly_capacity_data,
+        "mandatory_projects": mandatory_projects,
+        "project_dependencies": project_dependencies,
+        "project_conflicts": project_conflicts,
+        "start_date": start_date,
+    }
+
+    st.session_state.optimization_input_snapshot = get_optimization_input_snapshot()
+    st.session_state.optimization_status_message = "Optimization successful."
