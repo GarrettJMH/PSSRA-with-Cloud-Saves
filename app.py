@@ -989,6 +989,7 @@ if active_page == "Workers":
 
                 # Clearing old Q matrix.
                 st.session_state.q_matrix = []
+                app_state.clear_optimization_results()
 
                 st.success("Worker added.")
                 app_state.autosave_current_state(reason="worker added")
@@ -1336,6 +1337,37 @@ if active_page == "Results":
 
         # If all required inputs exist, run optimization.
         else:
+
+            project_names = [
+                str(project.get("Project name", "")).strip()
+                for project in st.session_state.projects
+                if str(project.get("Project name", "")).strip() != ""
+            ]
+
+            duplicate_project_names = sorted({
+                name for name in project_names
+                if project_names.count(name) > 1
+            })
+
+            worker_names = [
+                str(worker.get("Worker name", "")).strip()
+                for worker in st.session_state.workers
+                if str(worker.get("Worker name", "")).strip() != ""
+            ]
+
+            duplicate_worker_names = sorted({
+                name for name in worker_names
+                if worker_names.count(name) > 1
+            })
+
+            if duplicate_project_names:
+                st.error(f"Duplicate project names found: {', '.join(duplicate_project_names)}")
+                st.stop()
+
+            if duplicate_worker_names:
+                st.error(f"Duplicate worker names found: {', '.join(duplicate_worker_names)}")
+                st.stop()
+
             # Convert Streamlit project rows into optimizer project dictionary.
             projects_data = helper.build_projects(st.session_state.projects, planning_start_date=start_date)
 

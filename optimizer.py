@@ -79,7 +79,7 @@ class ProjectSelectionGMRA:
         required_roles = [
             (project, role)
             for project in project_list
-            for role in self.projects[project]["required_roles"]
+            for role in list(dict.fromkeys(self.projects[project]["required_roles"]))
         ]
 
         # Need 1 worker for each role in each project
@@ -212,13 +212,15 @@ class ProjectSelectionGMRA:
         # PROJECT SELECTION AND ROLE-FILLING CONSTRAINTS
         # -----------------------------
 
-        # If a project is selected, each required role must be filled by exactly one worker.
-        for project in project_list:
-            for role in self.projects[project]["required_roles"]:
+        # If a project is selected, each required role must be filled by the required number of workers.
+        for p_index, project in enumerate(project_list):
+            unique_roles = list(dict.fromkeys(self.projects[project]["required_roles"]))
+
+            for r_index, role in enumerate(unique_roles):
                 model += (
                     pulp.lpSum(assignment[(worker, project, role)] for worker in worker_list)
                     == T_pr[(project, role)] * selected_project[project],
-                    f"Fill_{project}_{role}"
+                    f"Fill_{p_index}_{r_index}"
                 )
 
         # Force mandatory projects to be selected.
