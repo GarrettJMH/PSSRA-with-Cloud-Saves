@@ -573,11 +573,26 @@ if active_page == "Overview":
             - Manual cloud saving using Supabase and an access code
             - Optional login-based autosave and recovery
             - Clear All Data option that also deletes autosaved recovery data for logged-in users
+            """
+        )
+        
+        with st.expander("Additional Save Information", expanded=False):
+                    st.markdown(
+                        """
+                        These save features were implemented as experimental storage options rather than as a finalized storage system. 
+                        Local scenario files, access-code cloud saves, and account-based autosaves each represent seperate saved instances of a scenario, but are not unified into a single-version storage structure. 
+                        The access-based cloud saving, autosaving, and local save methods all create different instances and are saved in separate locations.
+                        """
+                    )
 
+        st.markdown(
+            """
             **Feedback**
             - Feedback page linking to a prototype feedback form
             """
         )
+
+
 
     st.markdown("### Notes")
 
