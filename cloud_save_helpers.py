@@ -1,3 +1,6 @@
+# Supabase helper functions for access-code cloud saves and logged-in user autosaves
+# Two storage styles (in this file): access-code saves and autosaves.
+
 import hashlib
 
 from datetime import datetime, timezone
@@ -5,6 +8,7 @@ from datetime import datetime, timezone
 import streamlit as st
 
 from supabase import create_client
+
 
 TABLE_NAME = "saved_scenarios"
 
@@ -35,6 +39,7 @@ def hash_access_code(access_code):
     return hashlib.sha256(salted_code.encode("utf-8")).hexdigest()
 
 
+# Access-code saves create named scenario records that can be listed, loaded, or deleted.
 def save_scenario_to_cloud(scenario_name, access_code, scenario_json):
     """
     Saves a scenario to Supabase.
@@ -130,6 +135,7 @@ def delete_scenario_from_cloud(scenario_id, access_code):
 AUTOSAVE_TABLE_NAME = "user_autosaves"
 
 
+# Autosaves use upsert so each logged-in user keeps one latest recovery snapshot.
 def save_user_autosave(user_id, user_email, scenario_json):
     """
     Saves the latest autosave for a user.

@@ -1,14 +1,12 @@
+# Data-preparation and reporting helpers for the Streamlit app. These functions clean uploaded data, build optimizer inputs, and prepare result tables for display/export.
 
-# Importing Streamlit.
+
 import streamlit as st
 
-# Importing pandas.
 import pandas as pd
 
-# Importing date and timedelta for deadline calculations and calendar schedule display.
 from datetime import date, timedelta
 
-# Importing math to help with urgency scheduling.
 import math
 
 import re
@@ -16,7 +14,6 @@ import re
 # -----------------------------
 # GENERAL HELPERS
 # -----------------------------
-
 def split_items(value):
     """
     Converts a comma-separated string into a list.
@@ -31,12 +28,11 @@ def split_items(value):
     if value is None:
         return []
 
-    # Handles blank cells from CSV/Excel imports, which may appear as NaN.
+    # Handles blank cells from CSV/Excel imports (or NaN).
     if pd.isna(value):
         return []
 
-    # Convert the value to a string, split by commas, remove spaces,
-    # and ignore any blank entries.
+    # Convert the value to a string, split by commas, remove spaces, and ignore any blank entries.
     return [
         item.strip()
         for item in str(value).split(",")
@@ -118,7 +114,7 @@ def parse_unavailability_date_item(item):
 
     item = str(item).strip()
 
-    # Split date ranges written as "date to date".
+    # Split date ranges written as "'date' to 'date'".
     parts = re.split(r"\s+to\s+", item, flags=re.IGNORECASE)
 
     try:
@@ -136,7 +132,7 @@ def parse_unavailability_date_item(item):
     except Exception:
         return None
 
-    # If the user accidentally enters the dates backward, fix the order.
+    # If date order is entered backward, fix the order.
     if end_date < start_date:
         start_date, end_date = end_date, start_date
 
@@ -188,22 +184,18 @@ def value_is_true(value):
     This helps because imported Excel/CSV values may be True, FALSE, yes, 1, etc.
     """
 
-    # Empty values should not count as True.
     if value is None:
         return False
 
-    # Blank spreadsheet cells may appear as NaN.
     if pd.isna(value):
         return False
 
-    # Accept several common ways of writing a true value.
     return str(value).strip().lower() in ["true", "yes", "y", "1"]
 
 
 # -----------------------------
 # FILE IMPORT HELPERS
 # -----------------------------
-
 def read_uploaded_table(uploaded_file):
     """
     Reads either a CSV or Excel file into a Pandas DataFrame.
@@ -220,7 +212,7 @@ def read_uploaded_table(uploaded_file):
     elif file_name.endswith(".xlsx"):
         return pd.read_excel(uploaded_file)
 
-    # If the file is not supported, show an error and return None.
+    # If the file is not supported, show an error.
     else:
         st.error("Unsupported file type. Please upload a CSV or Excel file.")
         return None
@@ -237,7 +229,6 @@ def load_projects_from_file(uploaded_file):
     # Read the uploaded file into a DataFrame.
     projects_df = read_uploaded_table(uploaded_file)
 
-    # Stop if the file could not be read.
     if projects_df is None:
         return []
 
@@ -250,34 +241,27 @@ def load_projects_from_file(uploaded_file):
             st.error(f"Missing required column in project file: {column}")
             return []
 
-    # If the file does not include a Mandatory column, assume projects are not mandatory by default.
     if "Mandatory" not in projects_df.columns:
         projects_df["Mandatory"] = False
 
-    # If the file does not include deadline information, use a blank deadline so older project files still work.
     if "Deadline" not in projects_df.columns:
         projects_df["Deadline"] = ""
 
     if "Project context" not in projects_df.columns:
         projects_df["Project context"] = ""
 
-    # If the file does not include duration information, assume each project takes one week by default.
     if "Estimated duration (weeks)" not in projects_df.columns:
         projects_df["Estimated duration (weeks)"] = 1
 
-    # If the file does not include default role-hour information, assume each required role uses one hour per week by default.
     if "Role hours/week" not in projects_df.columns:
         projects_df["Role hours/week"] = 1
 
-    # If the file does not include dependency information, use blank dependency values by default.
     if "Depends on" not in projects_df.columns:
         projects_df["Depends on"] = ""
 
-    # If the file does not include conflict information, use blank conflict values by default.
     if "Conflicts with" not in projects_df.columns:
         projects_df["Conflicts with"] = ""
 
-    # Track the source file for imported project rows.
     if "Uploaded file" not in projects_df.columns:
         projects_df["Uploaded file"] = uploaded_file.name
 
@@ -285,7 +269,7 @@ def load_projects_from_file(uploaded_file):
     return clean_records(projects_df.to_dict("records"))
 
 
-# Loads worker data from an uploaded CSV or Excel file.
+# Load worker data from an uploaded CSV or Excel file.
 def load_workers_from_file(uploaded_file):
     """
     Loads worker data from an uploaded CSV or Excel file.
@@ -296,7 +280,6 @@ def load_workers_from_file(uploaded_file):
     # Read the uploaded file into a DataFrame.
     workers_df = read_uploaded_table(uploaded_file)
 
-    # Stop if the file could not be read.
     if workers_df is None:
         return []
 
@@ -309,19 +292,15 @@ def load_workers_from_file(uploaded_file):
             st.error(f"Missing required column in worker file: {column}")
             return []
 
-    # Track the source file for imported worker rows.
     if "Uploaded profile" not in workers_df.columns:
         workers_df["Uploaded profile"] = uploaded_file.name
 
-    # Check the file for preferred roles.
     if "Preferred roles" not in workers_df.columns:
         workers_df["Preferred roles"] = ""
 
-    # Check for unavailability. If missing, the worker is assumed to be available every week.
     if "Unavailability" not in workers_df.columns:
         workers_df["Unavailability"] = ""
 
-    #Checking the uploaded file has the required weekly hours column.
     if "Weekly hours" not in workers_df.columns:
         st.error("Missing required column in worker file: Weekly hours")
         return []
@@ -333,7 +312,6 @@ def load_workers_from_file(uploaded_file):
 # -----------------------------
 # DATE AND SCHEDULING HELPERS
 # -----------------------------
-
 # Calculates real deadline dates into numeric values that can be used by the optimizer.
 def calculate_deadline(deadline_value, planning_start_date=None):
     """
@@ -386,7 +364,6 @@ def week_to_date_range(week_number, planning_start_date):
 # -----------------------------
 # PROJECT DATA BUILDERS
 # -----------------------------
-
 def parse_specific_role_hours(value):
     """
     Converts a text value like:
@@ -441,7 +418,7 @@ def build_mandatory_projects(project_rows):
 
     # Loop through each project row.
     for row in project_rows:
-        # Get and clean the project name.
+        # Get the project name.
         project_name = str(row.get("Project name", "")).strip()
 
         # Skip blank project names.
@@ -479,10 +456,8 @@ def build_project_dependencies(project_rows):
 
     # Loop through each project row.
     for row in project_rows:
-        # This project is the dependent project.
         dependent_project = str(row.get("Project name", "")).strip()
 
-        # Skip blank project names.
         if dependent_project == "":
             continue
 
@@ -518,7 +493,7 @@ def build_project_conflicts(project_rows):
 
     project_conflicts = []
 
-    # Create a set of valid project names.
+    # Create a set of project names.
     project_names = {
         str(row.get("Project name", "")).strip()
         for row in project_rows
@@ -527,10 +502,8 @@ def build_project_conflicts(project_rows):
 
     # Loop through each project row.
     for row in project_rows:
-        # This is the first project in the conflict pair.
         project_a = str(row.get("Project name", "")).strip()
 
-        # Skip blank project names.
         if project_a == "":
             continue
 
@@ -546,7 +519,7 @@ def build_project_conflicts(project_rows):
                 and project_b != project_a
                 and project_b in project_names
             ):
-                # Sorting prevents duplicate conflict pairs in opposite order.
+                # Sorting to prevent duplicate conflict pairs in opposite order.
                 pair = tuple(sorted([project_a, project_b]))
 
                 if pair not in project_conflicts:
@@ -610,15 +583,13 @@ def parse_workers_per_role(value):
     return role_requirements
 
 def build_projects(project_rows, planning_start_date=None):
-    # Dictionary that will store all projects for the optimization model.
+    # Dictionary that will store all projects.
     projects = {}
 
     # Loop through each project row entered in the Streamlit app.
     for row in project_rows:
-        # Get and clean the project name from the row.
         raw_project_name = row.get("Project name", "")
 
-        # Skip blank project names, including NaN from editable tables.
         if is_blank_value(raw_project_name):
             continue
 
@@ -627,32 +598,30 @@ def build_projects(project_rows, planning_start_date=None):
         # Get the selected roles for the project.
         required_roles = split_items(row.get("Roles", ""))
 
-        # Skip rows with no roles.
         if len(required_roles) == 0:
             continue
 
-        # Get the base project priority safely.
+        # Get the base project priority.
         try:
             base_priority = int(float(row.get("Priority", 1)))
         except (TypeError, ValueError):
             st.warning(f"Skipping project '{project_name}' because its priority is invalid.")
             continue
 
-        # Get and process the project deadline.
+        # Get the project deadline.
         deadline = row.get("Deadline", "")
         days_till_due, weeks_till_due, urgency = calculate_deadline(deadline, planning_start_date)
 
-        # Get the estimated project duration safely.
+        # Get the estimated project duration.
         try:
             estimated_duration = int(float(row.get("Estimated duration (weeks)", 1)))
         except (TypeError, ValueError):
             estimated_duration = 1
 
-        # Combine base priority and deadline urgency to create a deadline-aware priority score.
+        # Create a total priority score.
         effective_priority = base_priority + urgency
 
         # Build all valid start weeks for the scheduling model.
-        # A project is deadline-feasible only if it can start early enough to finish by its deadline.
         if weeks_till_due is None:
             deadline_feasible = True
             deadline_note = ""
@@ -673,11 +642,10 @@ def build_projects(project_rows, planning_start_date=None):
                     f"{weeks_till_due} week(s) are available before the deadline."
                 )
 
-                # Keep a placeholder start week so the optimizer can still build variables safely.
-                # The optimizer will force this project to be unselected.
+                # Keep a placeholder start week so the optimizer can still build variables safely. The optimizer will force this project to be unselected.
                 valid_start_weeks = [1]
 
-        # Get the default weekly hours required for each role on this project safely.
+        # Get the default weekly hours required for each role on this project.
         try:
             role_hours = float(row.get("Role hours/week", 1))
         except (TypeError, ValueError):
@@ -698,7 +666,7 @@ def build_projects(project_rows, planning_start_date=None):
             if role not in role_requirements:
                 role_requirements[role] = 1
 
-        # Store each project using the format needed for the model.
+        # Store each project.
         projects[project_name] = {
             "project_context": row.get("Project context", ""),
             "priority": base_priority,
@@ -757,7 +725,7 @@ def complete_role_value_text(selected_roles, input_text, default_value, value_ty
         if role not in role_values:
             role_values[role] = default_value
 
-    # Format nicely for display/storage.
+    # Format for display/storage.
     formatted_parts = []
 
     for role in selected_roles:
@@ -811,7 +779,6 @@ def apply_project_defaults(project_records, default_workers_per_role=1, default_
 # -----------------------------
 # WORKER DATA BUILDERS
 # -----------------------------
-
 def build_workers(worker_rows):
     # List that will store worker names.
     workers = []
@@ -821,11 +788,9 @@ def build_workers(worker_rows):
         # Get the worker name from the row.
         worker_name = row["Worker name"]
 
-        # Add the worker if the name is not blank.
         if str(worker_name).strip() != "":
             workers.append(worker_name)
 
-    # Return the list of worker names.
     return workers
 
 def build_worker_preferences(worker_rows):
@@ -847,7 +812,6 @@ def build_worker_preferences(worker_rows):
     
     return worker_preferences
 
-# Weekly hours = estimated hours per week the worker can spend on projects.
 def build_weekly_hours(worker_rows):
     """
     Converts worker rows into a dictionary of worker weekly hours.
@@ -966,7 +930,7 @@ def build_worker_weekly_capacity(
 
                 current_date += timedelta(days=1)
 
-        # Reduce capacity for weeks affected by date-based unavailability.
+        # Reduce capacity for weeks affected by unavailability.
         for week_number, unavailable_dates in unavailable_workdays_by_week.items():
             unavailable_days = min(len(unavailable_dates), workdays_per_week)
 
@@ -984,10 +948,8 @@ def build_worker_weekly_capacity(
 # -----------------------------
 # Q MATRIX DATA BUILDERS
 # -----------------------------
-
-# Converts the saved Q matrix rows into the nested Q dictionary format required by the optimizer: Q[worker][project][role] = q_value.
+# Converts the saved Q matrix rows into the nested Q dictionary format the optimizer needs.
 def build_q_matrix(q_rows):
-    # Empty dictionary that will become the nested Q matrix.
     Q = {}
 
     # Loop through each row in the saved Q matrix table.
@@ -1009,14 +971,12 @@ def build_q_matrix(q_rows):
         # Store the Q value for this worker-project-role combination.
         Q[worker][project][role] = q_value
 
-    # Return the completed nested Q matrix.
     return Q
 
 
 # -----------------------------
 # RESULTS DISPLAY HELPERS
 # -----------------------------
-
 def explain_unselected_projects(
     all_projects,
     selected_projects,
@@ -1064,7 +1024,7 @@ def explain_unselected_projects(
         valid_start_weeks = project_data.get("valid_start_weeks", [])
         project_duration = project_data.get("estimated_duration_weeks", 1)
 
-        #
+        # Deadline/start feasibility
         if project_data.get("deadline_feasible", True) is False:
             reasons.append(
                 project_data.get(
@@ -1073,7 +1033,6 @@ def explain_unselected_projects(
                 )
             )
 
-        # Deadline/start feasibility
         if len(valid_start_weeks) == 0:
             reasons.append(
                 "No valid start week was available before the project deadline."
@@ -1139,19 +1098,17 @@ def explain_unselected_projects(
 
                 reasons.append(reason)
 
-        # Dependency explanations
+        # Dependency explanations.
         for dependent_project, required_project in project_dependencies:
             if dependent_project != project:
                 continue
 
-            # Case 1: required project was not selected
             if required_project not in selected_set:
                 reasons.append(
                     f"It depends on '{required_project}', which was not selected."
                 )
                 continue
 
-            # Case 2: required project was selected, but timing may not work
             required_schedule = project_schedule.get(required_project, {})
             required_active_weeks = required_schedule.get("Scheduled Active Weeks", [])
 
@@ -1171,7 +1128,7 @@ def explain_unselected_projects(
                         f"'{required_project}' finishes."
                     )
 
-        # Conflict explanations
+        # Conflict explanations.
         for project_a, project_b in project_conflicts:
             if project == project_a and project_b in selected_set:
                 reasons.append(
@@ -1183,7 +1140,7 @@ def explain_unselected_projects(
                     f"It conflicts with selected project '{project_a}', so both projects could not fit in the selected schedule."
                 )
 
-        # General fallback
+        # General fallback.
         if len(reasons) == 0:
             reasons.append(
                 "This project may be feasible on its own, but it did not fit with the best overall schedule when considering the other selected projects, worker capacity, deadlines, and project relationships."
@@ -1233,7 +1190,7 @@ def build_weekly_hours_usage(assignments, projects_data, weekly_hours, project_s
 
     usage_rows = []
 
-    # Sort by week first, then worker name, so the table reads like a weekly schedule.
+    # Sort by week first, then worker name.
     for (worker, week), used_hours in sorted(
         usage.items(),
         key=lambda item: (item[0][1], item[0][0])
@@ -1258,7 +1215,6 @@ def build_weekly_hours_usage(assignments, projects_data, weekly_hours, project_s
 # -----------------------------
 # RESULTS DOWNLOAD HELPERS
 # -----------------------------
-
 def build_summary_rows(
         total_selected_projects,
         total_entered_projects,
@@ -1376,17 +1332,14 @@ def create_results(
             if max_row == 1 and max_col == 1 and worksheet["A1"].value is None:
                 continue
 
-            # Freeze the header row.
             worksheet.freeze_panes = "A2"
 
-            # Style the header row.
             for cell in worksheet[1]:
                 cell.fill = header_fill
                 cell.font = header_font
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 cell.border = thin_border
 
-            # Style body cells.
             for row in worksheet.iter_rows(min_row=2, max_row=max_row, max_col=max_col):
                 for cell in row:
                     cell.border = thin_border
@@ -1412,7 +1365,6 @@ def create_results(
                 table.tableStyleInfo = style
                 worksheet.add_table(table)
 
-            # Set sensible column widths.
             for col_num in range(1, max_col + 1):
                 column_letter = get_column_letter(col_num)
 
@@ -1424,7 +1376,6 @@ def create_results(
                 adjusted_width = min(max(max_length + 2, 12), 45)
                 worksheet.column_dimensions[column_letter].width = adjusted_width
 
-            # Make long-text sheets easier to read.
             if sheet_name == "Unselected Projects":
                 worksheet.column_dimensions["A"].width = 28
                 worksheet.column_dimensions["B"].width = 110
@@ -1443,13 +1394,11 @@ def create_results(
                 worksheet.column_dimensions["A"].width = 12
                 worksheet.column_dimensions["B"].width = 20
 
-            # Center numeric-looking columns.
             for row in worksheet.iter_rows(min_row=2, max_row=max_row, max_col=max_col):
                 for cell in row:
                     if isinstance(cell.value, (int, float)):
                         cell.alignment = Alignment(horizontal="center", vertical="top")
 
-            # Row heights for readability.
             worksheet.row_dimensions[1].height = 24
 
             if sheet_name == "Unselected Projects":
@@ -1464,7 +1413,6 @@ def create_results(
                 for row_num in range(2, max_row + 1):
                     worksheet.row_dimensions[row_num].height = 22
 
-        # Make the Summary sheet a little cleaner.
         if "Summary" in workbook.sheetnames:
             summary_sheet = workbook["Summary"]
             summary_sheet.column_dimensions["A"].width = 28

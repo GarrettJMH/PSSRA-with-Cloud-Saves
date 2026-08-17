@@ -1,3 +1,5 @@
+# Load the role library CSV and convert the keyword fields into Python structures.
+
 import pandas as pd
 
 

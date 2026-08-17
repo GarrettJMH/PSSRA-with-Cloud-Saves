@@ -1,3 +1,5 @@
+# The main app can use this file when AI generation is enabled and an API key is available.
+
 import json
 import re
 import os
@@ -112,6 +114,7 @@ def simplify_projects_for_gemini(projects):
     return simplified_projects
 
 
+# Gemini responses are cleaned and validated because model output may include extra formatting.
 def extract_json_array(text):
     """
     Attempts to extract a JSON array from Gemini's response.
@@ -133,28 +136,26 @@ def extract_json_array(text):
     cleaned_text = cleaned_text.replace("```", "")
     cleaned_text = cleaned_text.strip()
 
-    # First, try loading the cleaned text directly.
     try:
         parsed = json.loads(cleaned_text)
 
-        # If Gemini returned a list, that is what we want.
         if isinstance(parsed, list):
             return parsed
 
-        # If Gemini returned an object with a common list key, use that.
+        # If Gemini returned an object with a common list key.
         if isinstance(parsed, dict):
             for key in ["q_matrix", "Q Matrix", "rows", "data", "results"]:
                 if key in parsed and isinstance(parsed[key], list):
                     return parsed[key]
 
-            # If it is a single row object, wrap it in a list.
+            # If single row object, wrap it in a list.
             if all(k in parsed for k in ["Worker", "Project", "Role", "Q Value"]):
                 return [parsed]
 
     except json.JSONDecodeError:
         pass
 
-    # Fallback: try to extract the first JSON array from surrounding text.
+    # Try to extract the first JSON array from surrounding text.
     match = re.search(r"\[.*\]", cleaned_text, re.DOTALL)
 
     if match:
@@ -181,6 +182,7 @@ def build_role_library_text(roles, role_descriptions, keywords, related_skills):
     return json.dumps(role_lines, indent=2)
 
 
+# Prompt construction.
 def build_q_generation_prompt(workers, projects, roles, role_descriptions, keywords, related_skills):
     """
     Builds the prompt sent to Gemini for Q-matrix generation.
@@ -335,6 +337,7 @@ def fill_missing_q_rows(q_rows, workers, projects):
     return completed_rows
 
 
+# Main Gemini workflow.
 def generate_q_matrix_with_gemini(
     workers,
     projects,
@@ -362,9 +365,7 @@ def generate_q_matrix_with_gemini(
     if not api_key:
         raise ValueError("Gemini API key not found.")
 
-    # Important:
-    # The client is created inside this function, not globally.
-    # This lets the app run normally when no API key exists.
+    # The client is created inside this function, not globally. This lets the app run normally when no API key exists.
     client = genai.Client(api_key=api_key)
 
     prompt = build_q_generation_prompt(

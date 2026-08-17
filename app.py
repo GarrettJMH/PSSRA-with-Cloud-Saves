@@ -1,5 +1,5 @@
 # Streamlit app for project selection, scheduling, role assignment, and results display.
-# The optimization itself is handled in optimizer_rev2.py.
+# The app collects project/worker inputs, builds Q values, runs the optimizer, and displays/export results.
 
 # Importing Streamlit for the user interface.
 import streamlit as st
@@ -31,6 +31,7 @@ import cloud_save_helpers as cloud_save
 
 import app_state_helpers as app_state
 
+
 st.set_page_config(
     page_title="Project Scheduling and Role Assignment Optimizer",
     layout="wide"
@@ -43,7 +44,7 @@ app_state.handle_login_choice()
 DEFAULT_WORKERS_PER_ROLE = 1
 DEFAULT_ROLE_HOURS_PER_WEEK = 4
 
-ENABLE_GEMINI_GENERATION = False # Set to true to enable gemimi generation code.
+ENABLE_GEMINI_GENERATION = False # Set to true to enable Gemini generation code.
 
 
 # Role library. Returns:
@@ -415,6 +416,7 @@ with st.sidebar:
 
     st.divider()
 
+    # Logged-in users can keep one autosave that updates as their scenario changes.
     st.markdown("### Autosave")
 
     if app_state.is_user_logged_in():
@@ -616,13 +618,13 @@ if active_page == "Projects":
     st.subheader("Project Selection")
     st.caption("Add projects manually or import a project list from CSV/Excel.")
 
-    # Build a list of existing project names so a new projects can reference existing projects.
+    # Build a list of existing project names so new projects can reference existing projects.
     existing_projects = [
         project.get("Project name", "") for project in st.session_state.projects
         if str(project.get("Project name", "")).strip() != ""
     ]
 
-    # Form for entering one project at a time (manual entry).
+    # Form for manual project entry.
     with st.form("project_form", clear_on_submit=True):
         # Text input for project name.
         name = st.text_input(
@@ -637,7 +639,7 @@ if active_page == "Projects":
             help="Describe the project's purpose, requirements, and/or keywords. Used for Q-matrix generation."
         )
 
-        # Slider input for project priority.
+        # Project priority.
         priority = st.slider(
             "Project priority:",
             min_value=1,
@@ -647,7 +649,7 @@ if active_page == "Projects":
             help="Set the importance of the project. Higher priority projects will have higher weight in the optimizer."
         )
 
-        # Date input for the project deadline.
+        # Project deadline.
         deadline = st.date_input(
             "Project deadline:",
             value=None,
@@ -655,7 +657,7 @@ if active_page == "Projects":
             help="Input the date of the project deadline."
         )
 
-        # Number input for the estimated project duration in weeks.
+        # Estimated project duration in weeks.
         estimated_duration = st.number_input(
             "Estimated duration in weeks:",
             min_value=1,
@@ -666,7 +668,7 @@ if active_page == "Projects":
             help="Enter how many weeks the project is expected to take to complete."
         )
 
-        # Multiselect input for required roles.
+        # Required roles.
         selected_roles = st.multiselect(
             "Project roles:",
             options=roles,
@@ -690,7 +692,7 @@ if active_page == "Projects":
 
         with st.expander("Advanced project relationship rules"):
             
-            # Checkbox for marking a project as mandatory.
+            # Mandatory checkbox.
             mandatory = st.checkbox(
                 "Mandatory project (optional)",
                 key="project_mandatory_input",
@@ -713,10 +715,10 @@ if active_page == "Projects":
                 help="Choose existing projects that cannot be active at the same time as this project. Projects must have already been submitted to appear here."
             )
 
-        # Submit button for the manual project form.
+        # Submit button for the project form.
         submit_project = st.form_submit_button("Submit Project")
 
-    # Validate and save project information after the manual submit button is pressed.
+    # Save project information after the submit button is pressed.
     if submit_project:
         # Project name is required.
         if name.strip() == "":
@@ -789,7 +791,7 @@ if active_page == "Projects":
             else:
                 st.warning("This project has already been added.")
 
-    # Project file import section.
+    # Project file imports.
     st.divider()
     st.subheader("Import projects")
 
@@ -810,7 +812,7 @@ if active_page == "Projects":
             help="Upload your CSV/Excel projects file here. The required columns are shown in the template."
         )
 
-        # If a project file has been uploaded, show the uploaded file name.
+        # If a project file has been uploaded, show the file name.
         if uploaded_project_file is not None:
             st.info(f"Uploaded file: {uploaded_project_file.name}")
 
@@ -820,7 +822,7 @@ if active_page == "Projects":
             if st.button("Import Project File", key="import_project_file_button"):
                 imported_projects = helper.load_projects_from_file(uploaded_project_file)
 
-                # If valid projects were imported, complete default values and add them to the project list.
+                # If valid projects were imported, fill default values and add them to the project list.
                 if len(imported_projects) > 0:
                     imported_projects = helper.apply_project_defaults(
                         imported_projects,
@@ -884,8 +886,7 @@ if active_page == "Projects":
     )
 
     # Save edited table rows back into session state.
-    # Complete default values and restore the hidden fallback value so the optimizer
-    # still has a default if a role is missing from "Role hours per week".
+    # Complete default values and restore the hidden fallback value so the optimizer still has a default if a role is missing from "Role hours per week".
     edited_project_records = helper.apply_project_defaults(
         edited_projects_df.to_dict("records"),
         default_workers_per_role=DEFAULT_WORKERS_PER_ROLE,
@@ -918,23 +919,23 @@ if active_page == "Workers":
     st.subheader("Worker Details")
     st.caption("Add workers manually or import a worker list from CSV/Excel.")
 
-    # Form for manual worker entry.
+    # Form for worker entry.
     with st.form("worker_form", clear_on_submit=True):
-        # Text input for worker name.
+        # Worker name.
         worker_name = st.text_input(
             "Worker name:",
             key="worker_name_input",
             help="Enter the worker's name."
         )
 
-        # Text area for worker profile/experience.
+        # Worker profile/experience.
         worker_profile = st.text_area(
             "Worker profile / experience:",
             key="worker_profile_input",
             help="Describe the worker's experience, backgrounds, and/or skills."
         )
 
-        # Multiselect input for worker skills.
+        # Worker skills.
         worker_skills = st.multiselect(
             "Worker skills:",
             options=roles,
@@ -942,7 +943,7 @@ if active_page == "Workers":
             help="Select the roles or skills this worker has."
         )
 
-        # Multiselect input for worker role preferences.
+        # Worker role preferences.
         worker_role_preferences = st.multiselect(
             "Worker preferred roles (optional):",
             options=roles,
@@ -950,7 +951,7 @@ if active_page == "Workers":
             help="Select roles the worker would prefer above others."
         )
 
-        # Weekly capacity hours = estimated hours per week the worker can spend on projects.
+        # Weekly capacity hours.
         weekly_hours = st.number_input(
             "Worker weekly capacity in hours:",
             min_value=1,
@@ -968,20 +969,17 @@ if active_page == "Workers":
             help="Enter the week numbers or date ranges (YYYY-MM-DD) the worker cannot work. Week 1 starts on the selected date in the sidebar."
         )
 
-        # Submit button for the manual worker form.
+        # Submit button for worker form.
         submit_worker = st.form_submit_button("Submit Worker")
 
-    # Validate and save worker information after submit button is pressed.
+    # Save worker information after submit button is pressed.
     if submit_worker:
-        # Worker name is required.
         if worker_name.strip() == "":
             st.warning("Please input a worker name.")
 
-        # Worker profile is required.
         elif worker_profile.strip() == "":
             st.warning("Please input a worker profile.")
 
-        # At least one worker skill needed.
         elif len(worker_skills) == 0:
             st.warning("Please select at least one skill.")
 
@@ -1012,7 +1010,7 @@ if active_page == "Workers":
             else:
                 st.warning("This worker has already been added.")
 
-    # Worker file import section.
+    # Worker file imports.
     st.divider()
     st.subheader("Import workers")
 
@@ -1119,11 +1117,9 @@ if active_page == "Q Matrix":
 
     # Generate the Q matrix using the rule-based Q-generation.
     if st.button("Generate Q Matrix"):
-        # Need at least one project before generating Q.
         if len(st.session_state.projects) == 0:
             st.warning("Please add at least one project first.")
 
-        # Need at least one worker before generating Q.
         elif len(st.session_state.workers) == 0:
             st.warning("Please add at least one worker first.")
 
@@ -1206,7 +1202,6 @@ if active_page == "Q Matrix":
         st.subheader("Q matrix")
 
         # Convert saved Q-matrix rows into a DataFrame.
-        # Convert saved Q-matrix rows into a DataFrame.
         full_q_df = pd.DataFrame(st.session_state.q_matrix)
 
         project_filter_options = ["All projects"] + sorted(
@@ -1255,7 +1250,7 @@ if active_page == "Q Matrix":
             app_state.autosave_current_state(reason="q matrix saved")
         st.caption("Click Save Q Matrix to store these Q values for optimization.")
 
-        # Clear current Q matrix if user wants to regenerate it.
+        # Clear current Q matrix.
         if st.button("Clear Saved Q Matrix"):
             st.session_state.q_matrix = []
             st.session_state.q_matrix_editor_version += 1
@@ -1282,7 +1277,6 @@ if active_page == "Q Matrix":
 
     st.divider()
 
-    # Display the role library for reference.
     st.subheader("Role library")
     st.caption("List of existing roles within the system.")
 
@@ -1313,7 +1307,7 @@ if active_page == "Results":
     st.warning("If you edited projects or workers, regenerate the Q matrix before running optimization.")
 
 
-    # Ensuring everyhting has been inputted/completed before showing results.
+    # Ensuring everything has been inputted/completed before showing results.
     st.markdown("### Readiness Check")
 
     def check_icon(condition):
@@ -1338,15 +1332,12 @@ if active_page == "Results":
 
     # Button that runs the optimization model using the current saved data.
     if st.button("Run Optimization"):
-        # The optimizer needs at least one project.
         if len(st.session_state.projects) == 0:
             st.warning("Please add at least one project first.")
 
-        # The optimizer needs at least one worker.
         elif len(st.session_state.workers) == 0:
             st.warning("Please add at least one worker first.")
 
-        # The optimizer needs a saved Q matrix.
         elif len(st.session_state.q_matrix) == 0:
             st.warning("Please save a Q matrix first.")
 
@@ -1402,7 +1393,7 @@ if active_page == "Results":
             worker_weekly_capacity_data = helper.build_worker_weekly_capacity(worker_rows=st.session_state.workers, 
                                                                               planning_start_date=start_date)
 
-            # Convert Streamlit Q rows into nested optimizer Q dictionary.
+            # Convert Streamlit Q rows into nested Q dictionary.
             q_data = helper.build_q_matrix(st.session_state.q_matrix)
 
             # Build a list of projects that must be selected.
@@ -1427,15 +1418,15 @@ if active_page == "Results":
                     "with an explanation."
                 )
 
-            # Build dependency constraints in the format:
+            # Build dependency constraints.
             # (dependent_project, required_project).
             project_dependencies = helper.build_project_dependencies(st.session_state.projects)
 
-            # Build conflict constraints in the format:
+            # Build conflict constraints.
             # (project_a, project_b).
             project_conflicts = helper.build_project_conflicts(st.session_state.projects)
 
-            # Create the optimization model using the user-entered data.
+            # Create the optimization model.
             model = ProjectSelectionGMRA(
                 workers=workers_data,
                 projects=projects_data,
@@ -1454,7 +1445,7 @@ if active_page == "Results":
                 gamma=st.session_state.start_week_penalty_input
             )
 
-            # Solve the model and return selected projects, role assignments, objective score, and the optimizer-chosen project schedule.
+            # Solve the model and return selected projects, role assignments, objective score, and the project schedule.
             selected_projects, assignments, objective_score, project_schedule = model.resolve()
 
             if objective_score is None:
@@ -1524,8 +1515,7 @@ if active_page == "Results":
         # Count how many projects were selected by the optimizer.
         total_selected_projects = len(selected_projects)
 
-        # Count how many worker-role assignments were actually made.
-        # Assignments are now stored as lists because a role may need multiple workers.
+        # Count how many worker-role assignments were actually made (now stored as lists since mutliple workers may be needed per role).
         total_assignments = sum(
             len(assigned_workers) if isinstance(assigned_workers, list) else 1
             for project_assignments in assignments.values()
@@ -1533,7 +1523,6 @@ if active_page == "Results":
         )
 
         # Count how many worker-role assignments are required for selected projects.
-        # This uses role_requirements so roles needing 2+ workers are counted correctly.
         total_required_roles_for_selected_projects = sum(
             int(projects_data[project].get("role_requirements", {}).get(role, 1))
             for project in selected_projects

@@ -1,3 +1,5 @@
+# Build, clean, export, and validate scenario save files.
+
 import json
 import re
 import math

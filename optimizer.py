@@ -1,6 +1,4 @@
-# Project selection, scheduling, and role assignment model.
-# This file contains only the optimization logic.
-# The Streamlit app prepares the input dictionaries and displays the results.
+# Project selection, scheduling, and role assignment model. This file contains only the optimization logic.
 
 # Import PuLP for linear/integer optimization.
 import pulp
@@ -19,13 +17,13 @@ class ProjectSelectionGMRA:
         # Dictionary of projects and their details.
         self.projects = projects
 
-        # Nested Q matrix where Q[worker][project][role] gives the suitability score.
+        # Nested Q matrix Q[worker][project][role].
         self.Q = Q
 
         # Project dependency constraints.
         self.project_dependencies = project_dependencies if project_dependencies is not None else []
 
-        # Project conflict constraints
+        # Project conflict constraints.
         self.project_conflicts = project_conflicts if project_conflicts is not None else []
 
         # Projects that must be selected if the model remains feasible.
@@ -34,16 +32,16 @@ class ProjectSelectionGMRA:
         # Weekly available project hours for each worker.
         self.weekly_hours = weekly_hours if weekly_hours is not None else {}
 
-        # Worker preferences
+        # Worker preferences.
         self.worker_preferences = worker_preferences if worker_preferences is not None else {}
 
-        # Worker unavailability information
+        # Worker unavailability information.
         self.worker_unavailability = worker_unavailability if worker_unavailability is not None else {}
 
         # Weekly capacity for each worker in each week.
         self.worker_weekly_capacity = worker_weekly_capacity if worker_weekly_capacity is not None else {}
 
-        # Minimum Q score required for a worker to be eligible.
+        # Minimum Q score.
         self.min_suitability = min_suitability
 
         # Weights for the objective function components.
@@ -73,7 +71,7 @@ class ProjectSelectionGMRA:
 
         D_pq = {} # Matrix for dependencies between two projects
 
-        Q_ipr = {}
+        Q_ipr = {} # Q Matrix for suitability using i, p, r
 
         # Create each required project-role.
         required_roles = [
@@ -82,7 +80,7 @@ class ProjectSelectionGMRA:
             for role in list(dict.fromkeys(self.projects[project]["required_roles"]))
         ]
 
-        # Need 1 worker for each role in each project
+        # Need 1 worker for each role in each project.
         for project, role, in required_roles:
             T_pr[(project, role)] = self.projects[project].get("role_requirements", {}).get(role, 1)
 
@@ -105,7 +103,6 @@ class ProjectSelectionGMRA:
             for project, role in required_roles
         ]
 
-        # Binary project-selection variables.
         # selected_project[project] = 1 if the project is selected, 0 otherwise.
         selected_project = pulp.LpVariable.dicts(
             "Selected_Project",
@@ -115,7 +112,6 @@ class ProjectSelectionGMRA:
             pulp.LpInteger
         )
 
-        # Binary worker-assignment variables.
         # assignment[worker, project, role] = 1 if the worker is assigned to that project-role.
         assignment = pulp.LpVariable.dicts(
             "Assignment",
@@ -132,7 +128,6 @@ class ProjectSelectionGMRA:
             for week in sorted(set(self.projects[project].get("valid_start_weeks", [1])))
         ]
 
-        # Binary project-start variables.
         # start_project[project, week] = 1 if the selected project starts in that week.
         start_project = pulp.LpVariable.dicts(
             "Start_Project",
@@ -153,7 +148,6 @@ class ProjectSelectionGMRA:
         for worker, project, role in assignment_keys:
             Q_ipr[(worker, project, role)] = self.Q[worker][project][role]
 
-        # Binary scheduled-assignment variables.
         # scheduled_assignment[worker, project, role, week] = 1 only when worker is assigned & project starts that week.
         scheduled_assignment = pulp.LpVariable.dicts(
             "Scheduled_Assignment",
@@ -163,10 +157,10 @@ class ProjectSelectionGMRA:
             pulp.LpInteger
         )
 
+
         # -----------------------------
         # OBJECTIVE FUNCTION COMPONENTS
         # -----------------------------
-
         # Project value rewards selecting higher-priority or deadline-adjusted projects.
         project_value = pulp.lpSum([
             self.projects[project].get("effective_priority", self.projects[project]["priority"])
@@ -199,19 +193,18 @@ class ProjectSelectionGMRA:
         )
 
 
-        # Bonus for completing projects
+        # Bonus for completing projects.
         project_completion_bonus = pulp.lpSum(
             selected_project[project] for project in project_list
         )
 
-        # Main objective function:
-        # maximize project value and worker-role fit, while slightly preferring earlier start weeks.
+        # Main objective function.
         model += (assignment_quality + (self.delta * project_value) + (self.beta * preference_bonus) + (self.alpha * project_completion_bonus) - (self.gamma * start_week_penalty))
+
 
         # -----------------------------
         # PROJECT SELECTION AND ROLE-FILLING CONSTRAINTS
         # -----------------------------
-
         # If a project is selected, each required role must be filled by the required number of workers.
         for p_index, project in enumerate(project_list):
             unique_roles = list(dict.fromkeys(self.projects[project]["required_roles"]))
@@ -252,10 +245,10 @@ class ProjectSelectionGMRA:
                 f"StartWeek_Selected_{project}"
             )
 
+
         # -----------------------------
         # PROJECT START-WEEK EXPRESSIONS
         # -----------------------------
-
         # Converts each project's chosen start week into a numeric expression.
         project_start_week = {}
 
@@ -265,10 +258,10 @@ class ProjectSelectionGMRA:
                 for week in self.projects[project].get("valid_start_weeks", [1])
                 )
 
+
         # -----------------------------
         # DEPENDENCY CONSTRAINTS
         # -----------------------------
-
         for p in project_list:
                 for q in project_list:
                     if D_pq[(p, q)] ==1:
@@ -277,8 +270,7 @@ class ProjectSelectionGMRA:
                             f"Dependency_{p}_requires_{q}"
                         )
 
-        # If the dependent project is selected, it must start after the required project finishes.
-        # If the dependent project is not selected, the large M value relaxes the constraint.
+        # If the dependent project is selected, it must start after the required project finishes. If the dependent project is not selected, the large M value relaxes the constraint.
         big_m = 100
 
         for p in project_list:
@@ -294,11 +286,10 @@ class ProjectSelectionGMRA:
                             f"Schedule_Dependency_{p}_after_{q}"
                         )
 
+
         # -----------------------------
         # SCHEDULED ASSIGNMENT LINKING
         # -----------------------------
-
-        # Link scheduled assignments to worker-role assignments and chosen project start weeks.
         # scheduled_assignment = 1 only when both assignment = 1 and start_project = 1.
         for worker, project, role, start_week in scheduled_assignment_keys:
 
@@ -334,9 +325,8 @@ class ProjectSelectionGMRA:
             )
         })
 
-        #######################
-        # MATRIX HELPER
 
+        # MATRIX HELPER
         for worker in worker_list:
             for week in all_weeks:
                 if week in self.worker_unavailability.get(worker, []):
@@ -347,12 +337,10 @@ class ProjectSelectionGMRA:
                         self.worker_weekly_capacity.get(worker, {}).get(week, self.weekly_hours.get(worker, 0))
                     )
 
-        ##########################
 
         # -----------------------------
         # ROLE-SPECIFIC HOURS HELPER
         # -----------------------------
-
         def get_role_hours(project, role):
             """
             Gets the weekly hours for a specific project role.
@@ -367,18 +355,15 @@ class ProjectSelectionGMRA:
                 self.projects[project].get("role_hours_per_week", 1)
         )
 
-        #######################
-        #MATRIX HOURS HELPER
 
+        #MATRIX HOURS HELPER
         for project, role in required_roles:
             H_pr[(project, role)] = get_role_hours(project, role)
 
-        #################
 
         # -----------------------------
         # CONFLICT CONSTRAINTS
         # -----------------------------
-
         # Conflicting projects are allowed to both be selected, but they cannot be active during the same week.      
         for p in project_list:
             for q in project_list:
@@ -406,9 +391,7 @@ class ProjectSelectionGMRA:
         # -----------------------------
         # WEEKLY WORKER-HOUR CONSTRAINTS
         # -----------------------------
-
-        # For each worker and each possible active week, sum the hours from all scheduled assignments
-        # active in that week and ensure the total does not exceed the worker's weekly available hours.
+        # For each worker and each possible active week, sum the hours from all scheduled assignments active in that week and ensure the total does not exceed the worker's weekly available hours.
         for worker in worker_list:
             for week in all_weeks:
                 active_hours_this_week = pulp.lpSum(
@@ -424,10 +407,10 @@ class ProjectSelectionGMRA:
                     f"Weekly_Hours_Capacity_{worker}_Week_{week}"
                 )
 
+
         # -----------------------------
         # SUITABILITY THRESHOLD CONSTRAINTS
         # -----------------------------
-
         # Prevent assignments where the worker's Q score is below the minimum suitability threshold.
         for worker, project, role in assignment_keys:
             if Q_ipr[(worker, project, role)] < self.min_suitability:
@@ -436,31 +419,29 @@ class ProjectSelectionGMRA:
                     f"Unsuitable_{worker}_{project}_{role}"
                 )
 
+
         # -----------------------------
         # SOLVE MODEL
         # -----------------------------
-
         # Solve the optimization problem using PuLP's CBC solver.
         status = model.solve(pulp.PULP_CBC_CMD(msg=False))
 
-        # Print the solver status for debugging.
+        # Print the solver status.
         print("Solver status:", pulp.LpStatus[status])
 
-        # If the solution is not optimal, return empty results using the same structure expected by the app.
+        # If the solution is not optimal, return empty results.
         if pulp.LpStatus[status] != "Optimal":
             print("No optimal feasible solution found.")
             return [], {}, None, {}
 
-        # -----------------------------
-        # EXTRACT SOLUTION FOR STREAMLIT DISPLAY
-        # -----------------------------
 
-        # Prepare containers for solved project list, assignments, and project schedule.
+        # -----------------------------
+        # EXTRACT SOLUTION FOR STREAMLIT
+        # -----------------------------
         selected = []
         assignments = {}
         project_schedule = {}
 
-        # Extract selected projects and their chosen schedules from the decision variables.
         for project in project_list:
 
             # Only process projects that were selected by the optimizer.
@@ -468,7 +449,6 @@ class ProjectSelectionGMRA:
                 selected.append(project)
                 assignments[project] = {}
 
-                # Find the start week chosen by the optimizer.
                 chosen_start_week = None
 
                 for week in self.projects[project].get("valid_start_weeks", [1]):

@@ -1,3 +1,6 @@
+# Rule-based Q-matrix generation. Each Q value estimates how suitable a worker is for a specific role within a specific project.
+
+
 import re
 
 import pandas as pd
@@ -59,6 +62,8 @@ def count_matches(terms, profile_lower):
 
     return matches
 
+# Project-context terms are filtered so additional words do not change the Q scores.
+
 PROJECT_CONTEXT_STOPWORDS = {
     "the", "and", "for", "with", "this", "that", "from", "into", "will",
     "need", "needs", "using", "used", "user", "users", "project", "role",
@@ -113,6 +118,8 @@ def count_context_matches(project_terms, worker_text_lower):
             matches.append(term)
 
     return matches
+
+# The main scoring function combines role matches, keyword matches, context matches, and penalties.
 
 def generate_q(worker_skills, worker_profile, role, project_name="", project_context=""):    
     """
@@ -214,7 +221,7 @@ def generate_q(worker_skills, worker_profile, role, project_name="", project_con
         worker_text_lower
     )
 
-    # Matches between project context and worker profile/skills are treated as positive evidence.
+    # Project context bonus.
     project_context_bonus = min(len(project_context_matches) * 0.05, 0.20)
     q_value += project_context_bonus
 
@@ -240,6 +247,7 @@ def generate_q(worker_skills, worker_profile, role, project_name="", project_con
     return q_value, "; ".join(reasons)
 
 
+# Build one Q row for every worker-project-role combination.
 def generate_q_matrix(workers, projects):
     """
     Generates the full Q matrix in row/table format.

@@ -1,3 +1,5 @@
+# Session-state, login, scenario loading, autosave, and optimization-result helpers for the Streamlit app.
+
 import streamlit as st
 from datetime import date
 from copy import deepcopy
@@ -178,6 +180,7 @@ def get_logged_in_user_email():
     return ""
 
 
+# Autosave helpers store one latest scenario snapshot for the logged-in user.
 def autosave_current_state(reason="", delete_if_empty=False):
     """
     Saves the current app state as the logged-in user's latest autosave.
@@ -221,6 +224,7 @@ def autosave_current_state(reason="", delete_if_empty=False):
         st.session_state.autosave_status_type = "error"
 
 
+# Scenario-loading helpers replace current session data and refresh editable tables.
 def apply_scenario_data_to_app(scenario_data):
     """
     Applies loaded scenario data to Streamlit session state.
@@ -357,6 +361,7 @@ def clear_all_app_data():
     clear_optimization_results()
 
 
+# Optimization result helpers keep results visible across Streamlit reruns.
 def initialize_optimization_result_state():
     if "optimization_results" not in st.session_state:
         st.session_state.optimization_results = None
