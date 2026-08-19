@@ -1,6 +1,6 @@
 # Project Selection, Scheduling, and Role Assignment Prototype
 
-This is a Streamlit prototype for project selection, scheduling, and role assignment. It uses a PuLP optimization model to help users select projects, assign workers to required project roles, and build a weekly schedule while considering deadlines, worker availability, weekly capacity, project dependencies, and project conflicts.
+This is a Streamlit prototype for project selection, scheduling, and role assignment. The prototype uses a PuLP optimization model to help users select projects, assign workers to required project roles, and build a weekly schedule while considering deadlines, worker availability, weekly capacity, project dependencies, project conflicts, and suitability scores.
 
 ## Purpose
 
@@ -19,41 +19,51 @@ The goal is to help users understand which projects can be completed, when they 
 
 - Manual project and worker entry
 - CSV/Excel project and worker import
-- Editable project and worker tables
-- Rule-based Q-matrix generation
-- Optional Gemini-based Q-matrix generation
-- Adjustable objective weights and Q-score threshold
+- Editable project, worker, and Q-matrix tables
+- Rule-based project-specific Q-matrix generation
+- Adjustable objective weights and minimum Q-score threshold
 - PuLP-based optimization
 - Project deadline and duration scheduling
-- Mandatory, conflict, and dependency constraints
-- Worker weekly-hour capacity and unavailability constraints
+- Mandatory, dependency, and conflict project constraints
+- Worker weekly-hour capacity constraints and unavailability handling
 - Results summary with selected projects and assignments
 - Worker weekly workload display
-- Excel export of results
+- Explanations for unselected projects
+- Excel export of optimization results
+- Local JSON save/load
+- Access-code cloud saving/loading
+- Logged-in user autosave and recovery
+- Building blocks for AI-generated Q-matrix exist in the code, but are unavailable by default.
+
+## Q Matrix
+
+The Q matrix represents worker-project-role suitability. Each Q value estimates how suitable a worker is for a specific role within a specific project. This project-specific structure allows the same worker-role pair to receive different suitability scores across different projects.
 
 ## Main Workflow
 
 1. Add or import project data.
 2. Add or import worker data.
 3. Generate the Q matrix.
-4. Run the optimizer.
-5. Review the results.
+4. Adjust optimization settings if needed.
+5. Run the optimizer.
+6. Review the results.
+7. Export results if needed.
+8. Save the scenario for later use at any time.
 
-## Results Export
+## Main Files
 
-After running the optimizer, the app can export results to Excel. It includes:
-
-- Summary
-- Optimization settings
-- Schedule
-- Assignments
-- Unselected projects
-- Worker workload
-- Deadline details
-- Project relationship rules
-
-## Saving Progress
-- progress can now be saved using a downloadable JSON file or through cloud saving on the sidebar.
+| File | Purpose |
+| --- | --- |
+| `app.py` | Main Streamlit interface and workflow |
+| `optimizer.py` | PuLP optimization model |
+| `q_generator.py` | Rule-based Q-matrix generation |
+| `gemini_q_generator.py` | Optional Gemini-based Q-matrix generation |
+| `helper_functions.py` | Data cleaning, input preparation, schedule handling, and result export helpers |
+| `app_state_helpers.py` | Streamlit session state, login, autosave, and result-state helpers |
+| `scenario_file_helpers.py` | Local JSON scenario save/load helpers |
+| `cloud_save_helpers.py` | Supabase cloud save and autosave helpers |
+| `role_keywords.py` | Loads role-library data from CSV |
+| `role_library.csv` | Role descriptions, keywords, related roles, and scoring terms |
 
 ## Run Locally
 
@@ -61,7 +71,14 @@ Install the required packages:
 
 ```bash
 pip install -r requirements.txt
+```
 
 Run the application:
 
-python -m streamlit run app_rev2.py
+```bash
+python -m streamlit run app.py
+```
+
+## Notes
+
+The deployed version may require Streamlit secrets for Supabase cloud saving, Google login, and the unactivated AI-generated Q-matrix generation. These are not included in the repository, so local testing requires your own credentials.
