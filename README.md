@@ -39,6 +39,10 @@ The goal is to help users understand which projects can be completed, when they 
 
 The Q matrix represents worker-project-role suitability. Each Q value estimates how suitable a worker is for a specific role within a specific project. This project-specific structure allows the same worker-role pair to receive different suitability scores across different projects.
 
+## Saving
+
+Each save option creates a separate instance of a user's progress. Local JSON saves, access-code cloud saves, and logged-in user autosaves are not interlinked. A local save may be different from an access-code cloud save or a logged-in autosave. Cloud-based saving features may become unavailable if the Supabase database or related credentials are unavailable. In that case, cloud saves or autosaves may fail, but local JSON saving should stay available.
+
 ## Main Workflow
 
 1. Add or import project data.
